@@ -12,17 +12,20 @@
     "validate:v4-env": "node scripts/validateFreshV4Env.mjs",
     "scan:failed": "node scripts/scanFailedTransactions.mjs",
     "commander": "node scripts/commander.mjs",
+    "summarize": "node scripts/summarize.mjs",
     "test": "node scripts/testAll.mjs",
     "lint": "eslint .",
     "typecheck": "tsc"
   },
   "dependencies": {
-    "ponder": "^0.16.6",
     "hono": "^4.5.0",
+    "pg": "^8.22.0",
+    "ponder": "^0.16.6",
     "viem": "^2.21.3"
   },
   "devDependencies": {
     "@types/node": "^20.9.0",
+    "@types/pg": "^8.20.0",
     "eslint": "^8.53.0",
     "eslint-config-ponder": "^0.16.6",
     "typescript": "^5.2.2"

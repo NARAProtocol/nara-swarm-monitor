@@ -4,3 +4,4 @@ import "./testWalletIntelligence.mjs";
 import "./testAlertRules.mjs";
 import "./testFailedTxScanner.mjs";
 import "./testCommander.mjs";
+import "./testAiSummarizer.mjs";

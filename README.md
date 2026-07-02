@@ -39,11 +39,17 @@ npm test
 npm run codegen
 npm run typecheck
 npm run commander
+npm run summarize
 npm run dev
 ```
 
 `npm run commander` is read-only. It expects a running Ponder API and reads from
 `COMMANDER_SQL_URL`, defaulting to `http://localhost:42069/sql`.
+
+`npm run summarize` is read-only with respect to protocol state. It reads the
+latest `commander_reports` row, uses `AI_SUMMARY_PROVIDER=local_stub` by default,
+prints a deterministic summary, and stores only an `ai_summaries` row through
+`DATABASE_URL`.
 
 ## Cold AI Warning
 
