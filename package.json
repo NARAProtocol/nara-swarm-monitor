@@ -13,6 +13,7 @@
     "scan:failed": "node scripts/scanFailedTransactions.mjs",
     "commander": "node scripts/commander.mjs",
     "summarize": "node scripts/summarize.mjs",
+    "notify": "node scripts/notify.mjs",
     "test": "node scripts/testAll.mjs",
     "lint": "eslint .",
     "typecheck": "tsc"

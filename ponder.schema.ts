@@ -460,6 +460,20 @@ export const ai_summaries = onchainTable("ai_summaries", (t) => ({
   createdAt: t.integer().notNull(),
 }));
 
+export const notification_deliveries = onchainTable("notification_deliveries", (t) => ({
+  id: t.text().primaryKey(),
+  chainId: t.integer().notNull(),
+  reportType: t.text().notNull(),
+  reportId: t.text().notNull(),
+  channel: t.text().notNull(),
+  status: t.text().notNull(),
+  destination: t.text().notNull(),
+  payloadHash: t.text().notNull(),
+  errorMessage: t.text(),
+  sentAt: t.integer(),
+  createdAt: t.integer().notNull(),
+}));
+
 export const decisions = onchainTable("decisions", (t) => ({
   id: t.text().primaryKey(),
   reportId: t.text().notNull(),
