@@ -8,6 +8,8 @@
     "start": "ponder start",
     "db": "ponder db",
     "codegen": "ponder codegen",
+    "validate:v4-env": "node scripts/validateFreshV4Env.mjs",
+    "test": "node scripts/testOpsRouterMonitoring.mjs",
     "lint": "eslint .",
     "typecheck": "tsc"
   },

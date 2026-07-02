@@ -30,5 +30,34 @@ export const NARAPositionNFTAbi = [
     ],
     name: "Transfer",
     type: "event"
+  },
+  {
+    anonymous: false,
+    inputs: [
+      { indexed: true, name: "previousOwner", type: "address" },
+      { indexed: true, name: "newOwner", type: "address" }
+    ],
+    name: "OwnershipTransferred",
+    type: "event"
+  },
+  {
+    anonymous: false,
+    inputs: [
+      { indexed: true, name: "owner", type: "address" },
+      { indexed: true, name: "approved", type: "address" },
+      { indexed: true, name: "tokenId", type: "uint256" }
+    ],
+    name: "Approval",
+    type: "event"
+  },
+  {
+    anonymous: false,
+    inputs: [
+      { indexed: true, name: "owner", type: "address" },
+      { indexed: true, name: "operator", type: "address" },
+      { indexed: false, name: "approved", type: "bool" }
+    ],
+    name: "ApprovalForAll",
+    type: "event"
   }
 ] as const;
