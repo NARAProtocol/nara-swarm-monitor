@@ -420,6 +420,28 @@ export const agent_reports = onchainTable("agent_reports", (t) => ({
   content: t.text().notNull(),
 }));
 
+export const commander_reports = onchainTable("commander_reports", (t) => ({
+  id: t.text().primaryKey(),
+  chainId: t.integer().notNull(),
+  status: t.text().notNull(),
+  severity: t.integer().notNull(),
+  title: t.text().notNull(),
+  summary: t.text().notNull(),
+  mainEvent: t.text().notNull(),
+  protocolActivityJson: t.text().notNull(),
+  walletActivityJson: t.text().notNull(),
+  positionActivityJson: t.text().notNull(),
+  adminActivityJson: t.text().notNull(),
+  treasuryActivityJson: t.text().notNull(),
+  routerActivityJson: t.text().notNull(),
+  failedTxActivityJson: t.text().notNull(),
+  riskSummaryJson: t.text().notNull(),
+  recommendedActionsJson: t.text().notNull(),
+  evidenceJson: t.text().notNull(),
+  requiresHumanDecision: t.integer().notNull(),
+  createdAt: t.integer().notNull(),
+}));
+
 export const decisions = onchainTable("decisions", (t) => ({
   id: t.text().primaryKey(),
   reportId: t.text().notNull(),

@@ -38,8 +38,12 @@ npm run sync:abis
 npm test
 npm run codegen
 npm run typecheck
+npm run commander
 npm run dev
 ```
+
+`npm run commander` is read-only. It expects a running Ponder API and reads from
+`COMMANDER_SQL_URL`, defaulting to `http://localhost:42069/sql`.
 
 ## Cold AI Warning
 
