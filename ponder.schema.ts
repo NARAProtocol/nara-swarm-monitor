@@ -284,6 +284,47 @@ export const wallet_activity_events = onchainTable("wallet_activity_events", (t)
   timestamp: t.integer().notNull(),
 }));
 
+export const failed_transactions = onchainTable("failed_transactions", (t) => ({
+  id: t.text().primaryKey(),
+  chainId: t.integer().notNull(),
+  txHash: t.text().notNull(),
+  blockNumber: t.bigint().notNull(),
+  blockHash: t.text().notNull(),
+  timestamp: t.integer().notNull(),
+  from: t.text().notNull(),
+  to: t.text().notNull(),
+  contractName: t.text().notNull(),
+  functionSelector: t.text().notNull(),
+  functionName: t.text().notNull(),
+  status: t.integer().notNull(),
+  value: t.bigint().notNull(),
+  gasUsed: t.bigint().notNull(),
+  effectiveGasPrice: t.bigint().notNull(),
+  revertReason: t.text(),
+  callPath: t.text().notNull(),
+  riskCategory: t.text().notNull(),
+  wallet: t.text().notNull(),
+  positionId: t.bigint(),
+  tokenId: t.text(),
+  amount: t.bigint(),
+  metadataJson: t.text(),
+}));
+
+export const failed_tx_groups = onchainTable("failed_tx_groups", (t) => ({
+  id: t.text().primaryKey(),
+  chainId: t.integer().notNull(),
+  wallet: t.text().notNull(),
+  contractName: t.text().notNull(),
+  functionName: t.text().notNull(),
+  functionSelector: t.text().notNull(),
+  windowStart: t.integer().notNull(),
+  windowEnd: t.integer().notNull(),
+  failureCount: t.integer().notNull(),
+  lastFailureTxHash: t.text().notNull(),
+  severity: t.integer().notNull(),
+  updatedAt: t.integer().notNull(),
+}));
+
 export const direct_engine_admin_call_events = onchainTable("direct_engine_admin_call_events", (t) => ({
   id: t.text().primaryKey(),
   chainId: t.integer().notNull(),
@@ -1002,6 +1043,162 @@ export const wallet_risk_ranking = onchainView("wallet_risk_ranking").as((qb) =>
     .orderBy(desc(wallet_current_profile.riskScore)),
 );
 
+export const failed_tx_recent = onchainView("failed_tx_recent").as((qb) =>
+  qb.select({
+    id: failed_transactions.id,
+    chainId: failed_transactions.chainId,
+    txHash: failed_transactions.txHash,
+    blockNumber: failed_transactions.blockNumber,
+    blockHash: failed_transactions.blockHash,
+    timestamp: failed_transactions.timestamp,
+    from: failed_transactions.from,
+    to: failed_transactions.to,
+    contractName: failed_transactions.contractName,
+    functionSelector: failed_transactions.functionSelector,
+    functionName: failed_transactions.functionName,
+    status: failed_transactions.status,
+    value: failed_transactions.value,
+    gasUsed: failed_transactions.gasUsed,
+    effectiveGasPrice: failed_transactions.effectiveGasPrice,
+    revertReason: failed_transactions.revertReason,
+    callPath: failed_transactions.callPath,
+    riskCategory: failed_transactions.riskCategory,
+    wallet: failed_transactions.wallet,
+    positionId: failed_transactions.positionId,
+    tokenId: failed_transactions.tokenId,
+    amount: failed_transactions.amount,
+    metadataJson: failed_transactions.metadataJson,
+  })
+    .from(failed_transactions)
+    .where(gte(failed_transactions.timestamp, sql<number>`extract(epoch from now())::integer - 86400`))
+    .orderBy(desc(failed_transactions.timestamp)),
+);
+
+export const failed_tx_by_wallet = onchainView("failed_tx_by_wallet").as((qb) =>
+  qb.select({
+    wallet: failed_transactions.wallet,
+    chainId: failed_transactions.chainId,
+    failureCount: sql<number>`count(*)`,
+    adminFailureCount: sql<number>`count(*) filter (where ${failed_transactions.riskCategory} in ('admin_revert', 'treasury_revert', 'router_revert'))`,
+    claimFailureCount: sql<number>`count(*) filter (where ${failed_transactions.riskCategory} = 'claim_revert')`,
+    lockFailureCount: sql<number>`count(*) filter (where ${failed_transactions.riskCategory} = 'lock_revert')`,
+    unlockFailureCount: sql<number>`count(*) filter (where ${failed_transactions.riskCategory} = 'unlock_revert')`,
+    maxFailureSeverity: sql<number>`max(case when ${failed_transactions.riskCategory} in ('admin_revert', 'treasury_revert', 'router_revert') then 5 when ${failed_transactions.riskCategory} in ('claim_revert', 'lock_revert', 'unlock_revert', 'bond_revert') then 4 else 3 end)`,
+    firstFailureAt: sql<number>`min(${failed_transactions.timestamp})`,
+    lastFailureAt: sql<number>`max(${failed_transactions.timestamp})`,
+    lastFailureTxHash: sql<string>`(array_agg(${failed_transactions.txHash} order by ${failed_transactions.timestamp} desc))[1]`,
+  })
+    .from(failed_transactions)
+    .groupBy(failed_transactions.wallet, failed_transactions.chainId),
+);
+
+export const failed_tx_by_function = onchainView("failed_tx_by_function").as((qb) =>
+  qb.select({
+    chainId: failed_transactions.chainId,
+    contractName: failed_transactions.contractName,
+    functionName: failed_transactions.functionName,
+    functionSelector: failed_transactions.functionSelector,
+    riskCategory: failed_transactions.riskCategory,
+    failureCount: sql<number>`count(*)`,
+    uniqueWalletCount: sql<number>`count(distinct ${failed_transactions.wallet})`,
+    firstFailureAt: sql<number>`min(${failed_transactions.timestamp})`,
+    lastFailureAt: sql<number>`max(${failed_transactions.timestamp})`,
+    lastFailureTxHash: sql<string>`(array_agg(${failed_transactions.txHash} order by ${failed_transactions.timestamp} desc))[1]`,
+  })
+    .from(failed_transactions)
+    .groupBy(
+      failed_transactions.chainId,
+      failed_transactions.contractName,
+      failed_transactions.functionName,
+      failed_transactions.functionSelector,
+      failed_transactions.riskCategory,
+    ),
+);
+
+export const failed_tx_admin_risk = onchainView("failed_tx_admin_risk").as((qb) =>
+  qb.select({
+    id: failed_transactions.id,
+    chainId: failed_transactions.chainId,
+    txHash: failed_transactions.txHash,
+    blockNumber: failed_transactions.blockNumber,
+    timestamp: failed_transactions.timestamp,
+    wallet: failed_transactions.wallet,
+    to: failed_transactions.to,
+    contractName: failed_transactions.contractName,
+    functionName: failed_transactions.functionName,
+    functionSelector: failed_transactions.functionSelector,
+    callPath: failed_transactions.callPath,
+    riskCategory: failed_transactions.riskCategory,
+    revertReason: failed_transactions.revertReason,
+  })
+    .from(failed_transactions)
+    .where(inArray(failed_transactions.riskCategory, ["admin_revert", "treasury_revert", "router_revert"])),
+);
+
+export const failed_tx_user_friction = onchainView("failed_tx_user_friction").as((qb) =>
+  qb.select({
+    id: failed_transactions.id,
+    chainId: failed_transactions.chainId,
+    txHash: failed_transactions.txHash,
+    blockNumber: failed_transactions.blockNumber,
+    timestamp: failed_transactions.timestamp,
+    wallet: failed_transactions.wallet,
+    contractName: failed_transactions.contractName,
+    functionName: failed_transactions.functionName,
+    functionSelector: failed_transactions.functionSelector,
+    riskCategory: failed_transactions.riskCategory,
+    positionId: failed_transactions.positionId,
+    tokenId: failed_transactions.tokenId,
+    amount: failed_transactions.amount,
+    revertReason: failed_transactions.revertReason,
+  })
+    .from(failed_transactions)
+    .where(inArray(failed_transactions.riskCategory, ["user_revert", "claim_revert", "lock_revert", "unlock_revert", "bond_revert"])),
+);
+
+export const failed_tx_spikes = onchainView("failed_tx_spikes").as((qb) =>
+  qb.select({
+    id: failed_tx_groups.id,
+    chainId: failed_tx_groups.chainId,
+    wallet: failed_tx_groups.wallet,
+    contractName: failed_tx_groups.contractName,
+    functionName: failed_tx_groups.functionName,
+    functionSelector: failed_tx_groups.functionSelector,
+    windowStart: failed_tx_groups.windowStart,
+    windowEnd: failed_tx_groups.windowEnd,
+    failureCount: failed_tx_groups.failureCount,
+    lastFailureTxHash: failed_tx_groups.lastFailureTxHash,
+    severity: failed_tx_groups.severity,
+    updatedAt: failed_tx_groups.updatedAt,
+  })
+    .from(failed_tx_groups)
+    .where(gte(failed_tx_groups.severity, 4)),
+);
+
+export const failed_tx_alert_summary = onchainView("failed_tx_alert_summary").as((qb) =>
+  qb.select({
+    ruleId: alerts.ruleId,
+    openAlertCount: sql<number>`count(*) filter (where ${alerts.status} = 'open')`,
+    criticalAlertCount: sql<number>`count(*) filter (where ${alerts.status} = 'open' and ${alerts.severity} = 5)`,
+    maxSeverity: sql<number>`coalesce(max(${alerts.severity}) filter (where ${alerts.status} = 'open'), 0)`,
+    totalOccurrences: sql<number>`coalesce(sum(${alerts.occurrenceCount}) filter (where ${alerts.status} = 'open'), 0)`,
+    lastSeenAt: sql<number>`max(${alerts.lastSeenAt})`,
+  })
+    .from(alerts)
+    .where(inArray(alerts.ruleId, [
+      "failed_unknown_direct_admin_call_spike",
+      "failed_treasury_call_spike",
+      "failed_router_ops_call_spike",
+      "same_wallet_same_function_repeated_failures",
+      "many_failed_claims",
+      "many_failed_locks",
+      "many_failed_unlocks",
+      "single_suspicious_failed_admin_attempt",
+      "single_suspicious_failed_treasury_attempt",
+    ]))
+    .groupBy(alerts.ruleId),
+);
+
 export const open_alerts = onchainView("open_alerts").as((qb) =>
   qb.select({
     id: alerts.id,
@@ -1095,6 +1292,8 @@ export const admin_alert_summary = onchainView("admin_alert_summary").as((qb) =>
       "role_granted_to_unknown_address",
       "role_admin_changed",
       "repeated_admin_attempts",
+      "failed_unknown_direct_admin_call_spike",
+      "single_suspicious_failed_admin_attempt",
     ]))
     .groupBy(alerts.ruleId),
 );
@@ -1109,7 +1308,11 @@ export const treasury_alert_summary = onchainView("treasury_alert_summary").as((
     lastSeenAt: sql<number>`max(${alerts.lastSeenAt})`,
   })
     .from(alerts)
-    .where(inArray(alerts.ruleId, ["large_treasury_withdrawal"]))
+    .where(inArray(alerts.ruleId, [
+      "large_treasury_withdrawal",
+      "failed_treasury_call_spike",
+      "single_suspicious_failed_treasury_attempt",
+    ]))
     .groupBy(alerts.ruleId),
 );
 
@@ -1122,7 +1325,11 @@ export const router_alert_summary = onchainView("router_alert_summary").as((qb) 
     lastSeenAt: sql<number>`max(${alerts.lastSeenAt})`,
   })
     .from(alerts)
-    .where(inArray(alerts.ruleId, ["unexpected_router_caller", "router_operation_spike"]))
+    .where(inArray(alerts.ruleId, [
+      "unexpected_router_caller",
+      "router_operation_spike",
+      "failed_router_ops_call_spike",
+    ]))
     .groupBy(alerts.ruleId),
 );
 

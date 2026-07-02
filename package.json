@@ -10,6 +10,7 @@
     "codegen": "ponder codegen",
     "sync:abis": "node scripts/syncV4AbisFromHardhat.mjs",
     "validate:v4-env": "node scripts/validateFreshV4Env.mjs",
+    "scan:failed": "node scripts/scanFailedTransactions.mjs",
     "test": "node scripts/testAll.mjs",
     "lint": "eslint .",
     "typecheck": "tsc"
