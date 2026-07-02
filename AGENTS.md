@@ -30,6 +30,10 @@ Before changing monitor logic, read:
 - `V4_START_BLOCK` is mandatory and must come from the fresh v4 deployment.
 - Hand-written ABIs are temporary only. Prefer generated ABIs from the active
   v4 Hardhat artifacts.
+- The monitor is read-only with respect to protocol state.
+- The monitor never sends transactions.
+- The monitor never holds private keys.
+- No monitor component may call contracts with write intent.
 
 ## Active Monitoring Scope
 
@@ -43,6 +47,29 @@ Use active v4 concepts only:
 - Liquidity growth hook, vault, and compounder events
 - Router and bribe router events
 - AccessControl, Ownable, Ownable2Step, Pausable, and emergency sweep events
+
+## Current Monitor Architecture
+
+- Ponder indexes active v4 events and call traces.
+- The failed transaction scanner is read-only and records reverted attempts
+  against active v4 contract addresses.
+- Deterministic rules create alerts from indexed tables and views.
+- Commander Agent v1 is deterministic read-only reporting.
+- AI Summarizer v1 only summarizes `commander_reports`.
+
+## AI Boundaries
+
+- AI cannot invent evidence.
+- AI cannot lower severity.
+- AI cannot hide critical alerts.
+- AI cannot create alerts.
+- AI cannot resolve alerts.
+- AI cannot change wallet or position scores.
+- AI cannot execute recommendations.
+- AI cannot send transactions.
+- AI cannot call contracts.
+- AI cannot post publicly unless a future notification output is explicitly
+  added and approved.
 
 ## Explicitly Out Of Scope Unless Rebuilt For v4
 
