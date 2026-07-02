@@ -50,6 +50,11 @@ npm run validate:v4-env
 The validator fails closed if required active v4 addresses are missing, zero, or
 retired.
 
+It also requires `CHAIN_ID`, `BASE_RPC_URL`, `DATABASE_URL`,
+`V4_START_BLOCK`, and `V4_EPOCH_LENGTH_SECONDS`, validates optional configured
+addresses when present, refuses `API_READ_ONLY=false`, and checks notification
+channel prerequisites without printing secret values.
+
 ### Step 3: Run Ponder Indexer
 
 Development:
@@ -159,11 +164,25 @@ The health check prints:
 - latest failed transaction scan time if available
 - API config summary without secret values
 
+## Hardening Checks
+
+Before production changes, run:
+
+```bash
+npm run check:docs
+npm run check:secrets
+```
+
+`check:docs` catches command/env/runbook drift. `check:secrets` checks that
+safe smoke commands do not print secret sentinel values and that committed
+example secret values remain blank.
+
 ## Safety Rules
 
 - No private keys.
 - No transactions.
 - No deploys.
+- No protocol writes.
 - No contract writes.
 - No secret printing.
 - No public posting unless a notification channel is explicitly enabled.

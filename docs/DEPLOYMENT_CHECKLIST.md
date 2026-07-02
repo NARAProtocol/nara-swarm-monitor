@@ -53,9 +53,12 @@ Use this checklist before starting or restarting the monitor stack.
 
 ## Runtime Safety
 
-- [ ] No private key is configured or required.
+- [ ] No private keys are configured or required.
 - [ ] No signer is configured or required.
+- [ ] No transactions are sent or required.
 - [ ] No transaction permissions are configured or required.
+- [ ] No protocol writes are possible from monitor runtime.
+- [ ] No secret printing appears in smoke commands or logs.
 - [ ] `BASE_RPC_URL` is read-only RPC access.
 - [ ] Ponder can connect to the database.
 - [ ] `COMMANDER_SQL_URL` points at the local Ponder SQL endpoint.
@@ -70,6 +73,8 @@ Use this checklist before starting or restarting the monitor stack.
 ```bash
 npm run sync:abis
 npm run validate:env
+npm run check:docs
+npm run check:secrets
 npm test
 npm run codegen
 npm run typecheck
@@ -87,4 +92,3 @@ Run one read-only reporting cycle after Ponder is indexing:
 ```bash
 npm run monitor:cycle
 ```
-

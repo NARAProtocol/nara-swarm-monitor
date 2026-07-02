@@ -7,3 +7,4 @@ import "./testCommander.mjs";
 import "./testAiSummarizer.mjs";
 import "./testNotifications.mjs";
 import "./testOperatorPackaging.mjs";
+import "./testEnvValidation.mjs";

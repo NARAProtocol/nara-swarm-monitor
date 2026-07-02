@@ -36,6 +36,17 @@ const requiredAddresses = [
   "V4_BREAK_GLASS_SAFE",
 ];
 
+const optionalAddresses = [
+  "V4_TREASURY_ADDRESS",
+  "V4_FINAL_ADMIN",
+  "DEPLOYER_ADDRESS",
+  "V4_LIQUIDITY_HOOK",
+  "V4_LIQUIDITY_VAULT",
+  "V4_LIQUIDITY_COMPOUNDER",
+];
+
+const supportedNotificationChannels = new Set(["console", "webhook", "telegram", "discord", "email"]);
+
 function parseEnvFile(path) {
   if (!existsSync(path)) return {};
 
@@ -61,10 +72,13 @@ function parseEnvFile(path) {
   return parsed;
 }
 
-const fileEnv = {
-  ...parseEnvFile(resolve(".env")),
-  ...parseEnvFile(resolve(".env.local")),
-};
+const shouldLoadEnvFiles = !process.argv.includes("--no-env-files") && process.env.NARA_ENV_VALIDATION_SKIP_FILES !== "true";
+const fileEnv = shouldLoadEnvFiles
+  ? {
+      ...parseEnvFile(resolve(".env")),
+      ...parseEnvFile(resolve(".env.local")),
+    }
+  : {};
 const env = { ...fileEnv, ...process.env };
 
 function fail(message) {
@@ -72,10 +86,53 @@ function fail(message) {
   process.exitCode = 1;
 }
 
-function assertAddress(name) {
-  const value = env[name]?.trim();
+function valueOf(name) {
+  return env[name]?.trim() ?? "";
+}
+
+function assertPositiveInteger(name, description) {
+  const value = valueOf(name);
+  if (!value || !Number.isInteger(Number(value)) || Number(value) <= 0) {
+    fail(`${name} must be a positive integer${description ? ` ${description}` : ""}.`);
+  }
+}
+
+function assertHttpUrl(name) {
+  const value = valueOf(name);
   if (!value) {
     fail(`${name} is required.`);
+    return;
+  }
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      fail(`${name} must be an http(s) URL.`);
+    }
+  } catch {
+    fail(`${name} must be a valid URL.`);
+  }
+}
+
+function assertDatabaseUrl(name) {
+  const value = valueOf(name);
+  if (!value) {
+    fail(`${name} is required.`);
+    return;
+  }
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol !== "postgres:" && parsed.protocol !== "postgresql:") {
+      fail(`${name} must use postgres:// or postgresql://.`);
+    }
+  } catch {
+    fail(`${name} must be a valid Postgres URL.`);
+  }
+}
+
+function assertAddress(name, required = true) {
+  const value = env[name]?.trim();
+  if (!value) {
+    if (required) fail(`${name} is required.`);
     return;
   }
   if (!/^0x[a-fA-F0-9]{40}$/.test(value)) {
@@ -92,14 +149,48 @@ function assertAddress(name) {
   }
 }
 
-const startBlock = env.V4_START_BLOCK?.trim();
-if (!startBlock || !Number.isInteger(Number(startBlock)) || Number(startBlock) <= 0) {
-  fail("V4_START_BLOCK must be a positive integer from the fresh v4 deployment.");
+function assertNotificationConfig() {
+  const rawChannels = valueOf("NOTIFY_CHANNELS") || "console";
+  const channels = rawChannels
+    .split(",")
+    .map((channel) => channel.trim().toLowerCase())
+    .filter(Boolean);
+  if (channels.length === 0) {
+    fail("NOTIFY_CHANNELS must include at least console or another supported channel.");
+    return;
+  }
+  for (const channel of channels) {
+    if (!supportedNotificationChannels.has(channel)) {
+      fail(`NOTIFY_CHANNELS includes unsupported channel ${channel}.`);
+    }
+  }
+  if (channels.includes("webhook")) assertHttpUrl("WEBHOOK_URL");
+  if (channels.includes("discord")) assertHttpUrl("DISCORD_WEBHOOK_URL");
+  if (channels.includes("telegram")) {
+    if (!valueOf("TELEGRAM_BOT_TOKEN")) fail("TELEGRAM_BOT_TOKEN is required when telegram notifications are enabled.");
+    if (!valueOf("TELEGRAM_CHAT_ID")) fail("TELEGRAM_CHAT_ID is required when telegram notifications are enabled.");
+  }
+}
+
+assertPositiveInteger("CHAIN_ID", "for the active v4 monitor chain");
+assertHttpUrl("BASE_RPC_URL");
+assertDatabaseUrl("DATABASE_URL");
+assertPositiveInteger("V4_START_BLOCK", "from the fresh v4 deployment");
+assertPositiveInteger("V4_EPOCH_LENGTH_SECONDS", "for the deployed engine epoch length");
+
+if (valueOf("API_READ_ONLY").toLowerCase() === "false") {
+  fail("API_READ_ONLY cannot be false for the read-only monitor.");
 }
 
 for (const name of requiredAddresses) {
   assertAddress(name);
 }
+
+for (const name of optionalAddresses) {
+  assertAddress(name, false);
+}
+
+assertNotificationConfig();
 
 if (process.exitCode) {
   process.exit();

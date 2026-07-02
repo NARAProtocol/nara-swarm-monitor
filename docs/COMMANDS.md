@@ -37,6 +37,13 @@ GraphQL endpoints implemented in `src/api/index.ts`.
 `npm run typecheck`
 : Runs TypeScript type checking.
 
+`npm run check:docs`
+: Verifies command docs, environment variable docs, and runbook runtime order
+stay aligned with `package.json` and `.env.example`.
+
+`npm run check:secrets`
+: Runs static and smoke checks that guard against printing secret env values.
+
 `npm run lint`
 : Runs ESLint.
 

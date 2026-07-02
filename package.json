@@ -19,6 +19,8 @@
     "monitor:cycle": "node scripts/monitorCycle.mjs",
     "monitor:cycle:dry-run": "node scripts/monitorCycle.mjs --dry-run",
     "monitor:health": "node scripts/monitorHealth.mjs",
+    "check:docs": "node scripts/checkDocsDrift.mjs",
+    "check:secrets": "node scripts/checkNoSecretLeakage.mjs",
     "test": "node scripts/testAll.mjs",
     "lint": "eslint .",
     "typecheck": "tsc"

@@ -1,0 +1,64 @@
+name: NARA Swarm Monitor CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    env:
+      CHAIN_ID: "8453"
+      BASE_RPC_URL: "https://mainnet.base.org"
+      DATABASE_URL: "postgres://postgres:postgres@localhost:5432/nara_monitor"
+      V4_START_BLOCK: "1"
+      V4_EPOCH_LENGTH_SECONDS: "900"
+      V4_NARA_TOKEN: "0x1000000000000000000000000000000000000001"
+      V4_ENGINE: "0x1000000000000000000000000000000000000002"
+      V4_POSITION_NFT: "0x1000000000000000000000000000000000000003"
+      V4_BOND_DEPOSITORY_NFT: "0x1000000000000000000000000000000000000004"
+      V4_BOND_VAULT: "0x1000000000000000000000000000000000000005"
+      V4_OPS_VAULT: "0x1000000000000000000000000000000000000006"
+      V4_ENGINE_OPS_ROUTER: "0x1000000000000000000000000000000000000007"
+      V4_BREAK_GLASS_SAFE: "0x1000000000000000000000000000000000000008"
+      NOTIFY_CHANNELS: "console"
+      NOTIFY_YELLOW: "true"
+      NOTIFY_GREEN: "false"
+      FORCE_NOTIFY: "false"
+      API_HOST: "127.0.0.1"
+      API_PORT: "42069"
+      API_READ_ONLY: "true"
+      API_MAX_LIMIT: "250"
+      AI_SUMMARY_PROVIDER: "local_stub"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check docs drift
+        run: npm run check:docs
+
+      - name: Check secret leakage
+        run: npm run check:secrets
+
+      - name: Validate seeded v4 environment
+        run: npm run validate:env
+
+      - name: Run seeded tests
+        run: npm test
+
+      - name: Run Ponder codegen
+        run: npm run codegen
+
+      - name: Typecheck
+        run: npm run typecheck
+

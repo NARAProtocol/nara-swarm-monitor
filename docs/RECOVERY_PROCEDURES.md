@@ -1,8 +1,13 @@
 # NARA Swarm Monitor Recovery Procedures
 
-All recovery actions here are read-only with respect to protocol state. Do not
-add private keys, send transactions, deploy contracts, write to contracts,
-resolve alerts automatically, or print secrets while recovering the monitor.
+All recovery actions here are read-only with respect to protocol state.
+
+- No private keys.
+- No transactions.
+- No protocol writes.
+- No secret printing.
+- No deploys.
+- No automatic alert resolution.
 
 ## Ponder Stuck
 
@@ -148,4 +153,3 @@ resolve alerts automatically, or print secrets while recovering the monitor.
    ```
 
 Never run destructive database commands against an unverified database target.
-
