@@ -1,7 +1,26 @@
-import { eq, inArray, onchainTable, onchainView } from "ponder";
+import {
+  and,
+  eq,
+  gte,
+  inArray,
+  isNull,
+  lte,
+  ne,
+  onchainTable,
+  onchainView,
+  sql,
+} from "ponder";
 
 // Unique IDs for events: chainId + transaction_hash + log_index
 // Unique IDs for transactions: chainId + transaction_hash
+
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+const configuredTreasuryAddress = (process.env.V4_TREASURY_ADDRESS || ZERO_ADDRESS).toLowerCase();
+const epochLengthSeconds = Number(process.env.V4_EPOCH_LENGTH_SECONDS || "900");
+const whaleLockedAmountWei = process.env.WALLET_WHALE_LOCKED_AMOUNT_WEI || "100000000000000000000000";
+const epochLengthSecondsSql = sql.raw(String(epochLengthSeconds));
+const whaleLockedAmountSql = sql.raw(whaleLockedAmountWei);
+const nowEpochSecondsSql = sql<number>`extract(epoch from now())::integer`;
 
 export const wallets = onchainTable("wallets", (t) => ({
   address: t.text().primaryKey(),
@@ -80,12 +99,22 @@ export const nfts = onchainTable("nfts", (t) => ({
   chainId: t.integer().notNull(),
   tokenIdRaw: t.bigint().notNull(),
   positionId: t.bigint(),
+  minter: t.text(),
   owner: t.text().notNull(),
+  positionAccount: t.text(),
+  principalAmount: t.bigint(),
+  durationEpochs: t.bigint(),
   tier: t.integer().notNull(),
   isGenesis: t.integer().notNull(), // 0 = regular, 1 = genesis
   isEternal: t.integer().notNull(), // 0 = regular, 1 = eternal
+  genesisRoundId: t.integer(),
+  genesisTierId: t.integer(),
+  genesisRewardMultiplierBps: t.integer(),
+  genesisRewardWeight: t.bigint(),
   mintedAtBlock: t.bigint().notNull(),
   mintedAtTimestamp: t.integer().notNull(),
+  lastOwnerUpdateBlock: t.bigint(),
+  lastOwnerUpdateTimestamp: t.integer(),
 }));
 
 export const nft_transfers = onchainTable("nft_transfers", (t) => ({
@@ -141,6 +170,42 @@ export const ops_router_events = onchainTable("ops_router_events", (t) => ({
   executableAt: t.bigint(),
   stagedEpoch: t.bigint(),
   trackedEmissionReserveAfter: t.bigint(),
+  blockNumber: t.bigint().notNull(),
+  blockHash: t.text().notNull(),
+  txHash: t.text().notNull(),
+  logIndex: t.integer().notNull(),
+  timestamp: t.integer().notNull(),
+}));
+
+export const position_claim_events = onchainTable("position_claim_events", (t) => ({
+  id: t.text().primaryKey(),
+  chainId: t.integer().notNull(),
+  source: t.text().notNull(),
+  tokenId: t.text(),
+  positionId: t.bigint(),
+  user: t.text(),
+  to: t.text().notNull(),
+  rewardToken: t.text().notNull(),
+  naraAmount: t.bigint().default(0n),
+  ethAmount: t.bigint().default(0n),
+  tokenAmount: t.bigint().default(0n),
+  blockNumber: t.bigint().notNull(),
+  blockHash: t.text().notNull(),
+  txHash: t.text().notNull(),
+  logIndex: t.integer().notNull(),
+  timestamp: t.integer().notNull(),
+}));
+
+export const position_events = onchainTable("position_events", (t) => ({
+  id: t.text().primaryKey(),
+  chainId: t.integer().notNull(),
+  eventType: t.text().notNull(),
+  tokenId: t.text(),
+  positionId: t.bigint(),
+  owner: t.text(),
+  to: t.text(),
+  amount: t.bigint(),
+  metadataJson: t.text(),
   blockNumber: t.bigint().notNull(),
   blockHash: t.text().notNull(),
   txHash: t.text().notNull(),
@@ -343,4 +408,289 @@ export const reward_reserve_accounting = onchainView("reward_reserve_accounting"
     "emission_reserve_deposited",
     "emission_reserve_synced",
   ])),
+);
+
+export const position_current_state = onchainView("position_current_state").as((qb) =>
+  qb.select({
+    id: locks.id,
+    chainId: locks.chainId,
+    positionId: locks.lockId,
+    tokenId: nfts.tokenId,
+    tokenIdRaw: nfts.tokenIdRaw,
+    positionAccount: nfts.positionAccount,
+    owner: sql<string>`case
+      when ${nfts.tokenId} is not null and ${nfts.owner} <> ${ZERO_ADDRESS} then ${nfts.owner}
+      when ${nfts.tokenId} is not null and ${nfts.owner} = ${ZERO_ADDRESS} then ${ZERO_ADDRESS}
+      when ${locks.user} <> ${ZERO_ADDRESS} then ${locks.user}
+      else ${ZERO_ADDRESS}
+    end`,
+    ownerSource: sql<string>`case
+      when ${nfts.tokenId} is not null and ${nfts.owner} <> ${ZERO_ADDRESS} then 'nft_owner'
+      when ${nfts.tokenId} is not null and ${nfts.owner} = ${ZERO_ADDRESS} then 'nft_owner_unknown'
+      when ${locks.user} <> ${ZERO_ADDRESS} then 'engine_lock_owner'
+      else 'unknown'
+    end`,
+    ownerStatus: sql<string>`case
+      when ${nfts.tokenId} is not null and ${nfts.owner} = ${ZERO_ADDRESS} then 'unknown_until_transfer'
+      when ${nfts.tokenId} is null and ${locks.user} = ${ZERO_ADDRESS} then 'unknown_until_transfer'
+      else 'known'
+    end`,
+    engineLockOwner: locks.user,
+    status: locks.status,
+    isWrapped: sql<number>`case when ${nfts.tokenId} is null then 0 else 1 end`,
+    amount: locks.amount,
+    principalAmount: sql<bigint>`coalesce(${nfts.principalAmount}, ${locks.amount})`,
+    activationEpoch: locks.activationEpoch,
+    unlockEpoch: locks.unlockEpoch,
+    estimatedUnlockTimestamp: sql<number>`(${locks.timestamp} + (((${locks.unlockEpoch} - ${locks.activationEpoch})::numeric * ${epochLengthSecondsSql})::integer))`,
+    weight: locks.weight,
+    durationEpochs: sql<bigint>`coalesce(${nfts.durationEpochs}, (${locks.unlockEpoch} - ${locks.activationEpoch}))`,
+    isGenesis: sql<number>`coalesce(${nfts.isGenesis}, 0)`,
+    isEternal: sql<number>`coalesce(${nfts.isEternal}, 0)`,
+    genesisRoundId: nfts.genesisRoundId,
+    genesisTierId: nfts.genesisTierId,
+    genesisRewardMultiplierBps: nfts.genesisRewardMultiplierBps,
+    genesisRewardWeight: sql<bigint>`coalesce(${nfts.genesisRewardWeight}, 0)`,
+    lastOwnerUpdateBlock: nfts.lastOwnerUpdateBlock,
+    lastOwnerUpdateTimestamp: nfts.lastOwnerUpdateTimestamp,
+    blockNumber: locks.blockNumber,
+    txHash: locks.txHash,
+    timestamp: locks.timestamp,
+  })
+    .from(locks)
+    .leftJoin(nfts, and(eq(locks.chainId, nfts.chainId), eq(locks.lockId, nfts.positionId))),
+);
+
+export const wallet_position_summary = onchainView("wallet_position_summary").as((qb) =>
+  qb.select({
+    wallet: position_current_state.owner,
+    ownerStatus: position_current_state.ownerStatus,
+    walletType: sql<string>`case
+      when ${position_current_state.ownerStatus} = 'unknown_until_transfer' then 'unknown'
+      when lower(${position_current_state.owner}) = ${configuredTreasuryAddress} then 'treasury'
+      when coalesce(sum(${position_current_state.amount}) filter (where ${position_current_state.status} = 'locked'), 0) >= ${whaleLockedAmountSql} then 'whale'
+      else 'user'
+    end`,
+    rawPositionCount: sql<number>`count(*) filter (where ${position_current_state.isWrapped} = 0)`,
+    nftPositionCount: sql<number>`count(*) filter (where ${position_current_state.isWrapped} = 1)`,
+    lockedNara: sql<bigint>`coalesce(sum(${position_current_state.amount}) filter (where ${position_current_state.status} = 'locked'), 0)`,
+    rawLockedNara: sql<bigint>`coalesce(sum(${position_current_state.amount}) filter (where ${position_current_state.status} = 'locked' and ${position_current_state.isWrapped} = 0), 0)`,
+    nftLockedNara: sql<bigint>`coalesce(sum(${position_current_state.amount}) filter (where ${position_current_state.status} = 'locked' and ${position_current_state.isWrapped} = 1), 0)`,
+    activeWeight: sql<bigint>`coalesce(sum(${position_current_state.weight}) filter (where ${position_current_state.status} = 'locked'), 0)`,
+    genesisRewardWeight: sql<bigint>`coalesce(sum(${position_current_state.genesisRewardWeight}) filter (where ${position_current_state.status} = 'locked'), 0)`,
+    unlockingSoon24hNara: sql<bigint>`coalesce(sum(${position_current_state.amount}) filter (where ${position_current_state.status} = 'locked' and ${position_current_state.estimatedUnlockTimestamp} between ${nowEpochSecondsSql} and (${nowEpochSecondsSql} + 86400)), 0)`,
+    unlockingSoon7dNara: sql<bigint>`coalesce(sum(${position_current_state.amount}) filter (where ${position_current_state.status} = 'locked' and ${position_current_state.estimatedUnlockTimestamp} between ${nowEpochSecondsSql} and (${nowEpochSecondsSql} + 604800)), 0)`,
+    positionCount: sql<number>`count(*)`,
+  })
+    .from(position_current_state)
+    .groupBy(position_current_state.owner, position_current_state.ownerStatus),
+);
+
+export const wallet_locked_exposure = onchainView("wallet_locked_exposure").as((qb) =>
+  qb.select({
+    wallet: position_current_state.owner,
+    ownerStatus: position_current_state.ownerStatus,
+    walletType: sql<string>`case
+      when ${position_current_state.ownerStatus} = 'unknown_until_transfer' then 'unknown'
+      when lower(${position_current_state.owner}) = ${configuredTreasuryAddress} then 'treasury'
+      when coalesce(sum(${position_current_state.amount}), 0) >= ${whaleLockedAmountSql} then 'whale'
+      else 'user'
+    end`,
+    lockedNara: sql<bigint>`coalesce(sum(${position_current_state.amount}), 0)`,
+    activeWeight: sql<bigint>`coalesce(sum(${position_current_state.weight}), 0)`,
+    rawLockedNara: sql<bigint>`coalesce(sum(${position_current_state.amount}) filter (where ${position_current_state.isWrapped} = 0), 0)`,
+    nftLockedNara: sql<bigint>`coalesce(sum(${position_current_state.amount}) filter (where ${position_current_state.isWrapped} = 1), 0)`,
+    genesisRewardWeight: sql<bigint>`coalesce(sum(${position_current_state.genesisRewardWeight}), 0)`,
+    lockedPositionCount: sql<number>`count(*)`,
+  })
+    .from(position_current_state)
+    .where(eq(position_current_state.status, "locked"))
+    .groupBy(position_current_state.owner, position_current_state.ownerStatus),
+);
+
+export const owner_locked_positions = onchainView("owner_locked_positions").as((qb) =>
+  qb.select({
+    id: position_current_state.id,
+    chainId: position_current_state.chainId,
+    owner: position_current_state.owner,
+    ownerSource: position_current_state.ownerSource,
+    ownerStatus: position_current_state.ownerStatus,
+    tokenId: position_current_state.tokenId,
+    positionId: position_current_state.positionId,
+    amount: position_current_state.amount,
+    weight: position_current_state.weight,
+    unlockEpoch: position_current_state.unlockEpoch,
+    estimatedUnlockTimestamp: position_current_state.estimatedUnlockTimestamp,
+    isWrapped: position_current_state.isWrapped,
+    isGenesis: position_current_state.isGenesis,
+    isEternal: position_current_state.isEternal,
+  })
+    .from(position_current_state)
+    .where(eq(position_current_state.status, "locked")),
+);
+
+export const treasury_locked_positions = onchainView("treasury_locked_positions").as((qb) =>
+  qb.select({
+    id: position_current_state.id,
+    chainId: position_current_state.chainId,
+    owner: position_current_state.owner,
+    ownerSource: position_current_state.ownerSource,
+    tokenId: position_current_state.tokenId,
+    positionId: position_current_state.positionId,
+    amount: position_current_state.amount,
+    weight: position_current_state.weight,
+    unlockEpoch: position_current_state.unlockEpoch,
+    estimatedUnlockTimestamp: position_current_state.estimatedUnlockTimestamp,
+    isWrapped: position_current_state.isWrapped,
+    isGenesis: position_current_state.isGenesis,
+  })
+    .from(position_current_state)
+    .where(and(
+      eq(position_current_state.status, "locked"),
+      eq(position_current_state.owner, configuredTreasuryAddress),
+      ne(position_current_state.ownerStatus, "unknown_until_transfer"),
+    )),
+);
+
+export const genesis_position_summary = onchainView("genesis_position_summary").as((qb) =>
+  qb.select({
+    owner: position_current_state.owner,
+    ownerStatus: position_current_state.ownerStatus,
+    genesisRoundId: position_current_state.genesisRoundId,
+    genesisTierId: position_current_state.genesisTierId,
+    positionCount: sql<number>`count(*)`,
+    eternalCount: sql<number>`count(*) filter (where ${position_current_state.isEternal} = 1)`,
+    lockedNara: sql<bigint>`coalesce(sum(${position_current_state.amount}) filter (where ${position_current_state.status} = 'locked'), 0)`,
+    genesisRewardWeight: sql<bigint>`coalesce(sum(${position_current_state.genesisRewardWeight}) filter (where ${position_current_state.status} = 'locked'), 0)`,
+  })
+    .from(position_current_state)
+    .where(eq(position_current_state.isGenesis, 1))
+    .groupBy(
+      position_current_state.owner,
+      position_current_state.ownerStatus,
+      position_current_state.genesisRoundId,
+      position_current_state.genesisTierId,
+    ),
+);
+
+export const unlock_cliffs_24h = onchainView("unlock_cliffs_24h").as((qb) =>
+  qb.select({
+    id: position_current_state.id,
+    chainId: position_current_state.chainId,
+    owner: position_current_state.owner,
+    ownerSource: position_current_state.ownerSource,
+    ownerStatus: position_current_state.ownerStatus,
+    tokenId: position_current_state.tokenId,
+    positionId: position_current_state.positionId,
+    amount: position_current_state.amount,
+    weight: position_current_state.weight,
+    estimatedUnlockTimestamp: position_current_state.estimatedUnlockTimestamp,
+    isWrapped: position_current_state.isWrapped,
+    isGenesis: position_current_state.isGenesis,
+  })
+    .from(position_current_state)
+    .where(and(
+      eq(position_current_state.status, "locked"),
+      gte(position_current_state.estimatedUnlockTimestamp, nowEpochSecondsSql),
+      lte(position_current_state.estimatedUnlockTimestamp, sql<number>`(${nowEpochSecondsSql} + 86400)`),
+    )),
+);
+
+export const unlock_cliffs_7d = onchainView("unlock_cliffs_7d").as((qb) =>
+  qb.select({
+    id: position_current_state.id,
+    chainId: position_current_state.chainId,
+    owner: position_current_state.owner,
+    ownerSource: position_current_state.ownerSource,
+    ownerStatus: position_current_state.ownerStatus,
+    tokenId: position_current_state.tokenId,
+    positionId: position_current_state.positionId,
+    amount: position_current_state.amount,
+    weight: position_current_state.weight,
+    estimatedUnlockTimestamp: position_current_state.estimatedUnlockTimestamp,
+    isWrapped: position_current_state.isWrapped,
+    isGenesis: position_current_state.isGenesis,
+  })
+    .from(position_current_state)
+    .where(and(
+      eq(position_current_state.status, "locked"),
+      gte(position_current_state.estimatedUnlockTimestamp, nowEpochSecondsSql),
+      lte(position_current_state.estimatedUnlockTimestamp, sql<number>`(${nowEpochSecondsSql} + 604800)`),
+    )),
+);
+
+export const nft_without_position_metadata = onchainView("nft_without_position_metadata").as((qb) =>
+  qb.select({
+    tokenId: nfts.tokenId,
+    chainId: nfts.chainId,
+    tokenIdRaw: nfts.tokenIdRaw,
+    owner: nfts.owner,
+    ownerStatus: sql<string>`case when ${nfts.owner} = ${ZERO_ADDRESS} then 'unknown_until_transfer' else 'known' end`,
+    lastOwnerUpdateBlock: nfts.lastOwnerUpdateBlock,
+    lastOwnerUpdateTimestamp: nfts.lastOwnerUpdateTimestamp,
+    mintedAtBlock: nfts.mintedAtBlock,
+    mintedAtTimestamp: nfts.mintedAtTimestamp,
+  })
+    .from(nfts)
+    .where(isNull(nfts.positionId)),
+);
+
+export const position_without_nft = onchainView("position_without_nft").as((qb) =>
+  qb.select({
+    id: locks.id,
+    chainId: locks.chainId,
+    positionId: locks.lockId,
+    owner: locks.user,
+    amount: locks.amount,
+    weight: locks.weight,
+    status: locks.status,
+    activationEpoch: locks.activationEpoch,
+    unlockEpoch: locks.unlockEpoch,
+    estimatedUnlockTimestamp: sql<number>`(${locks.timestamp} + (((${locks.unlockEpoch} - ${locks.activationEpoch})::numeric * ${epochLengthSecondsSql})::integer))`,
+    blockNumber: locks.blockNumber,
+    txHash: locks.txHash,
+    timestamp: locks.timestamp,
+  })
+    .from(locks)
+    .leftJoin(nfts, and(eq(locks.chainId, nfts.chainId), eq(locks.lockId, nfts.positionId)))
+    .where(isNull(nfts.tokenId)),
+);
+
+export const position_claim_history = onchainView("position_claim_history").as((qb) =>
+  qb.select({
+    id: position_claim_events.id,
+    chainId: position_claim_events.chainId,
+    source: position_claim_events.source,
+    tokenId: position_claim_events.tokenId,
+    positionId: position_claim_events.positionId,
+    user: position_claim_events.user,
+    to: position_claim_events.to,
+    rewardToken: position_claim_events.rewardToken,
+    naraAmount: position_claim_events.naraAmount,
+    ethAmount: position_claim_events.ethAmount,
+    tokenAmount: position_claim_events.tokenAmount,
+    blockNumber: position_claim_events.blockNumber,
+    blockHash: position_claim_events.blockHash,
+    txHash: position_claim_events.txHash,
+    logIndex: position_claim_events.logIndex,
+    timestamp: position_claim_events.timestamp,
+  }).from(position_claim_events),
+);
+
+export const position_owner_history = onchainView("position_owner_history").as((qb) =>
+  qb.select({
+    id: nft_transfers.id,
+    chainId: nft_transfers.chainId,
+    tokenId: nft_transfers.tokenId,
+    positionId: nfts.positionId,
+    from: nft_transfers.from,
+    to: nft_transfers.to,
+    ownerStatus: sql<string>`case when ${nft_transfers.to} = ${ZERO_ADDRESS} then 'unknown_until_transfer' else 'known' end`,
+    blockNumber: nft_transfers.blockNumber,
+    txHash: nft_transfers.txHash,
+    logIndex: nft_transfers.logIndex,
+    timestamp: nft_transfers.timestamp,
+  })
+    .from(nft_transfers)
+    .leftJoin(nfts, eq(nft_transfers.tokenId, nfts.tokenId)),
 );

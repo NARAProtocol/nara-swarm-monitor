@@ -11,6 +11,8 @@ import {
   ops_router_events,
   direct_engine_admin_call_events,
   admin_config_events,
+  position_claim_events,
+  position_events,
 } from "ponder:schema";
 import {
   CONTRACTS,
@@ -29,6 +31,84 @@ async function ensureWallet(db: any, address: string, blockNumber: bigint, times
     address,
     firstSeenBlock: blockNumber,
     lastUpdatedAt: timestamp,
+  }).onConflictDoNothing();
+}
+
+function stringifyMetadata(metadata: Record<string, unknown>): string {
+  return JSON.stringify(metadata, (_, value) => (typeof value === "bigint" ? value.toString() : value));
+}
+
+function positionTokenId(tokenId: bigint): string {
+  return `${chainId}-${tokenId}`;
+}
+
+async function recordPositionEvent(
+  context: any,
+  event: any,
+  eventType: string,
+  values: {
+    tokenId?: string | null;
+    positionId?: bigint | null;
+    owner?: string | null;
+    to?: string | null;
+    amount?: bigint | null;
+    metadata?: Record<string, unknown>;
+  },
+) {
+  const id = `${chainId}-${event.transaction.hash}-${event.log.logIndex}-${eventType}`;
+
+  await context.db.insert(position_events).values({
+    id,
+    chainId,
+    eventType,
+    tokenId: values.tokenId ?? null,
+    positionId: values.positionId ?? null,
+    owner: values.owner ? normalizeAddress(values.owner) : null,
+    to: values.to ? normalizeAddress(values.to) : null,
+    amount: values.amount ?? null,
+    metadataJson: values.metadata ? stringifyMetadata(values.metadata) : null,
+    blockNumber: event.block.number,
+    blockHash: event.block.hash,
+    txHash: event.transaction.hash,
+    logIndex: event.log.logIndex,
+    timestamp: Number(event.block.timestamp),
+  }).onConflictDoNothing();
+}
+
+async function recordPositionClaimEvent(
+  context: any,
+  event: any,
+  source: string,
+  values: {
+    tokenId?: string | null;
+    positionId?: bigint | null;
+    user?: string | null;
+    to: string;
+    rewardToken: string;
+    naraAmount?: bigint;
+    ethAmount?: bigint;
+    tokenAmount?: bigint;
+  },
+) {
+  const id = `${chainId}-${event.transaction.hash}-${event.log.logIndex}-${source}`;
+
+  await context.db.insert(position_claim_events).values({
+    id,
+    chainId,
+    source,
+    tokenId: values.tokenId ?? null,
+    positionId: values.positionId ?? null,
+    user: values.user ? normalizeAddress(values.user) : null,
+    to: normalizeAddress(values.to),
+    rewardToken: values.rewardToken,
+    naraAmount: values.naraAmount ?? 0n,
+    ethAmount: values.ethAmount ?? 0n,
+    tokenAmount: values.tokenAmount ?? 0n,
+    blockNumber: event.block.number,
+    blockHash: event.block.hash,
+    txHash: event.transaction.hash,
+    logIndex: event.log.logIndex,
+    timestamp: Number(event.block.timestamp),
   }).onConflictDoNothing();
 }
 
@@ -423,14 +503,18 @@ ponder.on("NARAEngine.withdrawTreasuryEthFees()", async ({ event, context }) => 
 
 // 5. NFT Wrapping Handlers
 ponder.on("NARAPositionNFT:PositionMinted", async ({ event, context }) => {
-  const tokenId = `${chainId}-${event.args.tokenId}`;
+  const tokenId = positionTokenId(event.args.tokenId);
   const timestamp = Number(event.block.timestamp);
 
   const existing = await context.db.find(nfts, { tokenId });
   if (existing) {
     await context.db.update(nfts, { tokenId }).set({
       positionId: event.args.positionId,
+      minter: event.args.minter,
       owner: event.args.owner,
+      positionAccount: event.args.account,
+      principalAmount: event.args.amount,
+      durationEpochs: event.args.durationEpochs,
     });
   } else {
     await context.db.insert(nfts).values({
@@ -438,18 +522,40 @@ ponder.on("NARAPositionNFT:PositionMinted", async ({ event, context }) => {
       chainId,
       tokenIdRaw: event.args.tokenId,
       positionId: event.args.positionId,
+      minter: event.args.minter,
       owner: event.args.owner,
+      positionAccount: event.args.account,
+      principalAmount: event.args.amount,
+      durationEpochs: event.args.durationEpochs,
       tier: 0,
       isGenesis: 0,
       isEternal: 0,
       mintedAtBlock: event.block.number,
       mintedAtTimestamp: timestamp,
+      lastOwnerUpdateBlock: event.block.number,
+      lastOwnerUpdateTimestamp: timestamp,
     });
   }
+
+  await recordPositionEvent(context, event, "position_minted", {
+    tokenId,
+    positionId: event.args.positionId,
+    owner: event.args.owner,
+    to: event.args.owner,
+    amount: event.args.amount,
+    metadata: {
+      minter: event.args.minter,
+      account: event.args.account,
+      durationEpochs: event.args.durationEpochs,
+    },
+  });
+
+  await ensureWallet(context.db, event.args.minter, event.block.number, timestamp);
+  await ensureWallet(context.db, event.args.owner, event.block.number, timestamp);
 });
 
 ponder.on("NARAPositionNFT:GenesisPositionMinted", async ({ event, context }) => {
-  const tokenId = `${chainId}-${event.args.tokenId}`;
+  const tokenId = positionTokenId(event.args.tokenId);
   const timestamp = Number(event.block.timestamp);
 
   const existing = await context.db.find(nfts, { tokenId });
@@ -459,6 +565,10 @@ ponder.on("NARAPositionNFT:GenesisPositionMinted", async ({ event, context }) =>
       tier: event.args.tierId,
       isGenesis: 1,
       isEternal: event.args.eternal ? 1 : 0,
+      genesisRoundId: event.args.roundId,
+      genesisTierId: event.args.tierId,
+      genesisRewardMultiplierBps: event.args.rewardMultiplierBps,
+      genesisRewardWeight: event.args.rewardWeight,
     });
   } else {
     await context.db.insert(nfts).values({
@@ -470,14 +580,32 @@ ponder.on("NARAPositionNFT:GenesisPositionMinted", async ({ event, context }) =>
       tier: event.args.tierId,
       isGenesis: 1,
       isEternal: event.args.eternal ? 1 : 0,
+      genesisRoundId: event.args.roundId,
+      genesisTierId: event.args.tierId,
+      genesisRewardMultiplierBps: event.args.rewardMultiplierBps,
+      genesisRewardWeight: event.args.rewardWeight,
       mintedAtBlock: event.block.number,
       mintedAtTimestamp: timestamp,
     });
   }
+
+  await recordPositionEvent(context, event, "genesis_position_minted", {
+    tokenId,
+    positionId: event.args.positionId,
+    owner: existing?.owner ?? ZERO_ADDRESS,
+    amount: event.args.rewardWeight,
+    metadata: {
+      roundId: event.args.roundId,
+      tierId: event.args.tierId,
+      rewardMultiplierBps: event.args.rewardMultiplierBps,
+      rewardWeight: event.args.rewardWeight,
+      eternal: event.args.eternal,
+    },
+  });
 });
 
 ponder.on("NARAPositionNFT:Transfer", async ({ event, context }) => {
-  const tokenId = `${chainId}-${event.args.tokenId}`;
+  const tokenId = positionTokenId(event.args.tokenId);
   const id = `${chainId}-${event.transaction.hash}-${event.log.logIndex}`;
   const timestamp = Number(event.block.timestamp);
 
@@ -485,6 +613,8 @@ ponder.on("NARAPositionNFT:Transfer", async ({ event, context }) => {
   if (existing) {
     await context.db.update(nfts, { tokenId }).set({
       owner: event.args.to,
+      lastOwnerUpdateBlock: event.block.number,
+      lastOwnerUpdateTimestamp: timestamp,
     });
   } else {
     await context.db.insert(nfts).values({
@@ -498,6 +628,8 @@ ponder.on("NARAPositionNFT:Transfer", async ({ event, context }) => {
       isEternal: 0,
       mintedAtBlock: event.block.number,
       mintedAtTimestamp: timestamp,
+      lastOwnerUpdateBlock: event.block.number,
+      lastOwnerUpdateTimestamp: timestamp,
     });
   }
 
@@ -511,6 +643,143 @@ ponder.on("NARAPositionNFT:Transfer", async ({ event, context }) => {
     txHash: event.transaction.hash,
     logIndex: event.log.logIndex,
     timestamp,
+  });
+
+  await recordPositionEvent(context, event, "nft_transfer", {
+    tokenId,
+    positionId: existing?.positionId ?? null,
+    owner: event.args.to,
+    to: event.args.to,
+    metadata: {
+      from: event.args.from,
+      to: event.args.to,
+    },
+  });
+
+  await ensureWallet(context.db, event.args.from, event.block.number, timestamp);
+  await ensureWallet(context.db, event.args.to, event.block.number, timestamp);
+});
+
+ponder.on("NARAPositionNFT:PositionRewardsClaimed", async ({ event, context }) => {
+  const tokenId = positionTokenId(event.args.tokenId);
+  const existing = await context.db.find(nfts, { tokenId });
+
+  await recordPositionClaimEvent(context, event, "position_rewards_claimed", {
+    tokenId,
+    positionId: event.args.positionId,
+    user: existing?.owner ?? null,
+    to: event.args.to,
+    rewardToken: "nara_eth",
+    naraAmount: event.args.naraAmount,
+    ethAmount: event.args.ethAmount,
+  });
+
+  await ensureWallet(context.db, event.args.to, event.block.number, Number(event.block.timestamp));
+});
+
+ponder.on("NARAPositionNFT:PositionTokenRewardsClaimed", async ({ event, context }) => {
+  const tokenId = positionTokenId(event.args.tokenId);
+  const existing = await context.db.find(nfts, { tokenId });
+
+  await recordPositionClaimEvent(context, event, "position_token_rewards_claimed", {
+    tokenId,
+    positionId: event.args.positionId,
+    user: existing?.owner ?? null,
+    to: event.args.to,
+    rewardToken: event.args.token,
+    tokenAmount: event.args.amount,
+  });
+
+  await ensureWallet(context.db, event.args.to, event.block.number, Number(event.block.timestamp));
+});
+
+ponder.on("NARAPositionNFT:ClosedPositionTokenRewardsClaimed", async ({ event, context }) => {
+  await recordPositionClaimEvent(context, event, "closed_position_token_rewards_claimed", {
+    tokenId: null,
+    positionId: event.args.positionId,
+    user: null,
+    to: event.args.to,
+    rewardToken: event.args.token,
+    tokenAmount: event.args.amount,
+  });
+
+  await ensureWallet(context.db, event.args.to, event.block.number, Number(event.block.timestamp));
+});
+
+ponder.on("NARAPositionNFT:GenesisEthClaimed", async ({ event, context }) => {
+  const tokenId = positionTokenId(event.args.tokenId);
+  const existing = await context.db.find(nfts, { tokenId });
+
+  await recordPositionClaimEvent(context, event, "genesis_eth_claimed", {
+    tokenId,
+    positionId: existing?.positionId ?? null,
+    user: existing?.owner ?? null,
+    to: event.args.to,
+    rewardToken: ZERO_ADDRESS,
+    ethAmount: event.args.amount,
+  });
+
+  await ensureWallet(context.db, event.args.to, event.block.number, Number(event.block.timestamp));
+});
+
+ponder.on("NARAPositionNFT:GenesisTokenClaimed", async ({ event, context }) => {
+  const tokenId = positionTokenId(event.args.tokenId);
+  const existing = await context.db.find(nfts, { tokenId });
+
+  await recordPositionClaimEvent(context, event, "genesis_token_claimed", {
+    tokenId,
+    positionId: existing?.positionId ?? null,
+    user: existing?.owner ?? null,
+    to: event.args.to,
+    rewardToken: "genesis_token",
+    tokenAmount: event.args.amount,
+  });
+
+  await ensureWallet(context.db, event.args.to, event.block.number, Number(event.block.timestamp));
+});
+
+ponder.on("NARAPositionNFT:PositionUnlocked", async ({ event, context }) => {
+  const tokenId = positionTokenId(event.args.tokenId);
+
+  await recordPositionEvent(context, event, "position_unlocked", {
+    tokenId,
+    positionId: event.args.positionId,
+    to: event.args.to,
+    metadata: {
+      to: event.args.to,
+    },
+  });
+
+  await ensureWallet(context.db, event.args.to, event.block.number, Number(event.block.timestamp));
+});
+
+ponder.on("NARAPositionNFT:PositionExtended", async ({ event, context }) => {
+  const tokenId = positionTokenId(event.args.tokenId);
+  const existing = await context.db.find(nfts, { tokenId });
+
+  await recordPositionEvent(context, event, "position_extended", {
+    tokenId,
+    positionId: event.args.positionId,
+    owner: existing?.owner ?? null,
+    amount: BigInt(event.args.additionalEpochs),
+    metadata: {
+      additionalEpochs: event.args.additionalEpochs,
+    },
+  });
+});
+
+ponder.on("NARAPositionNFT:EternalGenesisBurned", async ({ event, context }) => {
+  const tokenId = positionTokenId(event.args.tokenId);
+
+  await recordPositionEvent(context, event, "eternal_genesis_burned", {
+    tokenId,
+    positionId: event.args.positionId,
+    owner: event.args.account,
+    amount: event.args.rewardWeightRemoved,
+    metadata: {
+      account: event.args.account,
+      rewardWeightRemoved: event.args.rewardWeightRemoved,
+    },
   });
 });
 
