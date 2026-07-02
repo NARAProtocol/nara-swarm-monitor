@@ -6,3 +6,4 @@ import "./testFailedTxScanner.mjs";
 import "./testCommander.mjs";
 import "./testAiSummarizer.mjs";
 import "./testNotifications.mjs";
+import "./testOperatorPackaging.mjs";
