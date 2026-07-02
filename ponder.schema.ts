@@ -79,7 +79,7 @@ export const nfts = onchainTable("nfts", (t) => ({
   tokenId: t.text().primaryKey(), // chainId + tokenId
   chainId: t.integer().notNull(),
   tokenIdRaw: t.bigint().notNull(),
-  positionId: t.bigint().notNull(),
+  positionId: t.bigint(),
   owner: t.text().notNull(),
   tier: t.integer().notNull(),
   isGenesis: t.integer().notNull(), // 0 = regular, 1 = genesis

@@ -486,6 +486,19 @@ ponder.on("NARAPositionNFT:Transfer", async ({ event, context }) => {
     await context.db.update(nfts, { tokenId }).set({
       owner: event.args.to,
     });
+  } else {
+    await context.db.insert(nfts).values({
+      tokenId,
+      chainId,
+      tokenIdRaw: event.args.tokenId,
+      positionId: null,
+      owner: event.args.to,
+      tier: 0,
+      isGenesis: 0,
+      isEternal: 0,
+      mintedAtBlock: event.block.number,
+      mintedAtTimestamp: timestamp,
+    });
   }
 
   await context.db.insert(nft_transfers).values({
@@ -718,8 +731,8 @@ ponder.on("NARAToken:Approval", async ({ event, context }) => {
   });
 });
 
-// NARABondDepository:BondCreated
-ponder.on("NARABondDepository:BondCreated", async ({ event, context }) => {
+// NARABondDepositoryV4NFT:BondCreated
+ponder.on("NARABondDepositoryV4NFT:BondCreated", async ({ event, context }) => {
   const id = `${chainId}-${event.transaction.hash}-${event.log.logIndex}`;
   const timestamp = Number(event.block.timestamp);
 
@@ -740,8 +753,8 @@ ponder.on("NARABondDepository:BondCreated", async ({ event, context }) => {
   await ensureWallet(context.db, event.args.buyer, event.block.number, timestamp);
 });
 
-// NARABondDepository:CapacityAdded
-ponder.on("NARABondDepository:CapacityAdded", async ({ event, context }) => {
+// NARABondDepositoryV4NFT:CapacityAdded
+ponder.on("NARABondDepositoryV4NFT:CapacityAdded", async ({ event, context }) => {
   const id = `${chainId}-${event.transaction.hash}-${event.log.logIndex}`;
   const timestamp = Number(event.block.timestamp);
 
@@ -759,8 +772,8 @@ ponder.on("NARABondDepository:CapacityAdded", async ({ event, context }) => {
   });
 });
 
-// NARABondDepository:ExcessReturnedToVault
-ponder.on("NARABondDepository:ExcessReturnedToVault", async ({ event, context }) => {
+// NARABondDepositoryV4NFT:ExcessReturnedToVault
+ponder.on("NARABondDepositoryV4NFT:ExcessReturnedToVault", async ({ event, context }) => {
   const id = `${chainId}-${event.transaction.hash}-${event.log.logIndex}`;
   const timestamp = Number(event.block.timestamp);
 
@@ -778,8 +791,8 @@ ponder.on("NARABondDepository:ExcessReturnedToVault", async ({ event, context })
   });
 });
 
-// NARABondDepository:Paused
-ponder.on("NARABondDepository:Paused", async ({ event, context }) => {
+// NARABondDepositoryV4NFT:Paused
+ponder.on("NARABondDepositoryV4NFT:Paused", async ({ event, context }) => {
   const id = `${chainId}-${event.transaction.hash}-${event.log.logIndex}`;
   const timestamp = Number(event.block.timestamp);
 
@@ -796,8 +809,8 @@ ponder.on("NARABondDepository:Paused", async ({ event, context }) => {
   });
 });
 
-// NARABondDepository:Unpaused
-ponder.on("NARABondDepository:Unpaused", async ({ event, context }) => {
+// NARABondDepositoryV4NFT:Unpaused
+ponder.on("NARABondDepositoryV4NFT:Unpaused", async ({ event, context }) => {
   const id = `${chainId}-${event.transaction.hash}-${event.log.logIndex}`;
   const timestamp = Number(event.block.timestamp);
 

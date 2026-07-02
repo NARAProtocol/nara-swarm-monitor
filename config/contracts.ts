@@ -1,7 +1,7 @@
 import { NARATokenAbi } from "../abis/NARATokenAbi";
 import { NARAEngineAbi } from "../abis/NARAEngineAbi";
 import { NARAPositionNFTAbi } from "../abis/NARAPositionNFTAbi";
-import { NARABondDepositoryAbi } from "../abis/NARABondDepositoryAbi";
+import { NARABondDepositoryV4NFTAbi } from "../abis/NARABondDepositoryV4NFTAbi";
 import { NARABondVaultAbi } from "../abis/NARABondVaultAbi";
 import { NARAOpsVaultAbi } from "../abis/NARAOpsVaultAbi";
 import { NARAEngineOpsRouterV1Abi } from "../abis/NARAEngineOpsRouterV1Abi";
@@ -25,9 +25,9 @@ export const CONTRACTS = {
     abi: NARAPositionNFTAbi,
     startBlock,
   },
-  depository: {
-    address: requireFreshV4Address("V4_DEPOSITORY"),
-    abi: NARABondDepositoryAbi,
+  bondDepositoryNft: {
+    address: requireFreshV4Address("V4_BOND_DEPOSITORY_NFT"),
+    abi: NARABondDepositoryV4NFTAbi,
     startBlock,
   },
   bondVault: {

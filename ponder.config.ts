@@ -34,11 +34,11 @@ export default createConfig({
       address: CONTRACTS.positionNft.address,
       startBlock: CONTRACTS.positionNft.startBlock,
     },
-    NARABondDepository: {
+    NARABondDepositoryV4NFT: {
       chain: "base",
-      abi: CONTRACTS.depository.abi,
-      address: CONTRACTS.depository.address,
-      startBlock: CONTRACTS.depository.startBlock,
+      abi: CONTRACTS.bondDepositoryNft.abi,
+      address: CONTRACTS.bondDepositoryNft.address,
+      startBlock: CONTRACTS.bondDepositoryNft.startBlock,
     },
     NARABondVault: {
       chain: "base",

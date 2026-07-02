@@ -33,9 +33,9 @@ const targets = [
     output: "abis/NARABondVaultAbi.ts",
   },
   {
-    exportName: "NARABondDepositoryAbi",
+    exportName: "NARABondDepositoryV4NFTAbi",
     artifact: "artifacts/contracts/v4/NARABondDepositoryV4NFT.sol/NARABondDepositoryV4NFT.json",
-    output: "abis/NARABondDepositoryAbi.ts",
+    output: "abis/NARABondDepositoryV4NFTAbi.ts",
   },
   {
     exportName: "NARAOpsVaultAbi",

@@ -1,6 +1,6 @@
 // Generated from active v4 Hardhat artifacts. Do not edit by hand.
 // Source: ../nara-protocol-hardhat/artifacts/contracts/v4/NARABondDepositoryV4NFT.sol/NARABondDepositoryV4NFT.json
-export const NARABondDepositoryAbi = [
+export const NARABondDepositoryV4NFTAbi = [
   {
     "inputs": [
       {
