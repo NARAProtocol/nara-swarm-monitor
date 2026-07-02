@@ -333,6 +333,17 @@ export const alerts = onchainTable("alerts", (t) => ({
   title: t.text().notNull(),
   description: t.text().notNull(),
   status: t.text().notNull(), // "open" | "resolved"
+  txHash: t.text(),
+  blockNumber: t.bigint(),
+  wallet: t.text(),
+  positionId: t.bigint(),
+  tokenId: t.text(),
+  amount: t.bigint(),
+  viewName: t.text(),
+  sourceTable: t.text(),
+  sourceRowId: t.text(),
+  observedValue: t.text(),
+  thresholdValue: t.text(),
   firstSeenAt: t.integer().notNull(),
   lastSeenAt: t.integer().notNull(),
   occurrenceCount: t.integer().default(1),
@@ -989,4 +1000,140 @@ export const wallet_risk_ranking = onchainView("wallet_risk_ranking").as((qb) =>
   })
     .from(wallet_current_profile)
     .orderBy(desc(wallet_current_profile.riskScore)),
+);
+
+export const open_alerts = onchainView("open_alerts").as((qb) =>
+  qb.select({
+    id: alerts.id,
+    fingerprint: alerts.fingerprint,
+    severity: alerts.severity,
+    ruleId: alerts.ruleId,
+    title: alerts.title,
+    description: alerts.description,
+    txHash: alerts.txHash,
+    blockNumber: alerts.blockNumber,
+    wallet: alerts.wallet,
+    positionId: alerts.positionId,
+    tokenId: alerts.tokenId,
+    amount: alerts.amount,
+    viewName: alerts.viewName,
+    sourceTable: alerts.sourceTable,
+    sourceRowId: alerts.sourceRowId,
+    observedValue: alerts.observedValue,
+    thresholdValue: alerts.thresholdValue,
+    firstSeenAt: alerts.firstSeenAt,
+    lastSeenAt: alerts.lastSeenAt,
+    occurrenceCount: alerts.occurrenceCount,
+  })
+    .from(alerts)
+    .where(eq(alerts.status, "open")),
+);
+
+export const critical_alerts = onchainView("critical_alerts").as((qb) =>
+  qb.select({
+    id: alerts.id,
+    fingerprint: alerts.fingerprint,
+    severity: alerts.severity,
+    ruleId: alerts.ruleId,
+    title: alerts.title,
+    description: alerts.description,
+    txHash: alerts.txHash,
+    blockNumber: alerts.blockNumber,
+    wallet: alerts.wallet,
+    positionId: alerts.positionId,
+    tokenId: alerts.tokenId,
+    amount: alerts.amount,
+    viewName: alerts.viewName,
+    sourceTable: alerts.sourceTable,
+    sourceRowId: alerts.sourceRowId,
+    firstSeenAt: alerts.firstSeenAt,
+    lastSeenAt: alerts.lastSeenAt,
+    occurrenceCount: alerts.occurrenceCount,
+  })
+    .from(alerts)
+    .where(and(eq(alerts.status, "open"), eq(alerts.severity, 5))),
+);
+
+export const wallet_alert_summary = onchainView("wallet_alert_summary").as((qb) =>
+  qb.select({
+    wallet: alerts.wallet,
+    openAlertCount: sql<number>`count(*) filter (where ${alerts.status} = 'open')`,
+    criticalAlertCount: sql<number>`count(*) filter (where ${alerts.status} = 'open' and ${alerts.severity} = 5)`,
+    maxSeverity: sql<number>`coalesce(max(${alerts.severity}) filter (where ${alerts.status} = 'open'), 0)`,
+    lastSeenAt: sql<number>`max(${alerts.lastSeenAt})`,
+  })
+    .from(alerts)
+    .where(ne(alerts.wallet, ""))
+    .groupBy(alerts.wallet),
+);
+
+export const position_alert_summary = onchainView("position_alert_summary").as((qb) =>
+  qb.select({
+    positionId: alerts.positionId,
+    openAlertCount: sql<number>`count(*) filter (where ${alerts.status} = 'open')`,
+    criticalAlertCount: sql<number>`count(*) filter (where ${alerts.status} = 'open' and ${alerts.severity} = 5)`,
+    maxSeverity: sql<number>`coalesce(max(${alerts.severity}) filter (where ${alerts.status} = 'open'), 0)`,
+    lastSeenAt: sql<number>`max(${alerts.lastSeenAt})`,
+  })
+    .from(alerts)
+    .where(sql`${alerts.positionId} is not null`)
+    .groupBy(alerts.positionId),
+);
+
+export const admin_alert_summary = onchainView("admin_alert_summary").as((qb) =>
+  qb.select({
+    ruleId: alerts.ruleId,
+    openAlertCount: sql<number>`count(*) filter (where ${alerts.status} = 'open')`,
+    criticalAlertCount: sql<number>`count(*) filter (where ${alerts.status} = 'open' and ${alerts.severity} = 5)`,
+    maxSeverity: sql<number>`coalesce(max(${alerts.severity}) filter (where ${alerts.status} = 'open'), 0)`,
+    lastSeenAt: sql<number>`max(${alerts.lastSeenAt})`,
+  })
+    .from(alerts)
+    .where(inArray(alerts.ruleId, [
+      "direct_engine_admin_call_unapproved",
+      "param_or_treasury_direct_call_unapproved",
+      "role_granted_to_unknown_address",
+      "role_admin_changed",
+      "repeated_admin_attempts",
+    ]))
+    .groupBy(alerts.ruleId),
+);
+
+export const treasury_alert_summary = onchainView("treasury_alert_summary").as((qb) =>
+  qb.select({
+    ruleId: alerts.ruleId,
+    openAlertCount: sql<number>`count(*) filter (where ${alerts.status} = 'open')`,
+    criticalAlertCount: sql<number>`count(*) filter (where ${alerts.status} = 'open' and ${alerts.severity} = 5)`,
+    totalAmount: sql<bigint>`coalesce(sum(${alerts.amount}), 0)`,
+    maxSeverity: sql<number>`coalesce(max(${alerts.severity}) filter (where ${alerts.status} = 'open'), 0)`,
+    lastSeenAt: sql<number>`max(${alerts.lastSeenAt})`,
+  })
+    .from(alerts)
+    .where(inArray(alerts.ruleId, ["large_treasury_withdrawal"]))
+    .groupBy(alerts.ruleId),
+);
+
+export const router_alert_summary = onchainView("router_alert_summary").as((qb) =>
+  qb.select({
+    ruleId: alerts.ruleId,
+    openAlertCount: sql<number>`count(*) filter (where ${alerts.status} = 'open')`,
+    criticalAlertCount: sql<number>`count(*) filter (where ${alerts.status} = 'open' and ${alerts.severity} = 5)`,
+    maxSeverity: sql<number>`coalesce(max(${alerts.severity}) filter (where ${alerts.status} = 'open'), 0)`,
+    lastSeenAt: sql<number>`max(${alerts.lastSeenAt})`,
+  })
+    .from(alerts)
+    .where(inArray(alerts.ruleId, ["unexpected_router_caller", "router_operation_spike"]))
+    .groupBy(alerts.ruleId),
+);
+
+export const protocol_risk_summary = onchainView("protocol_risk_summary").as((qb) =>
+  qb.select({
+    openAlertCount: sql<number>`count(*) filter (where ${alerts.status} = 'open')`,
+    criticalAlertCount: sql<number>`count(*) filter (where ${alerts.status} = 'open' and ${alerts.severity} = 5)`,
+    severity4AlertCount: sql<number>`count(*) filter (where ${alerts.status} = 'open' and ${alerts.severity} = 4)`,
+    severity3AlertCount: sql<number>`count(*) filter (where ${alerts.status} = 'open' and ${alerts.severity} = 3)`,
+    maxSeverity: sql<number>`coalesce(max(${alerts.severity}) filter (where ${alerts.status} = 'open'), 0)`,
+    totalOccurrences: sql<number>`coalesce(sum(${alerts.occurrenceCount}) filter (where ${alerts.status} = 'open'), 0)`,
+    lastSeenAt: sql<number>`max(${alerts.lastSeenAt})`,
+  }).from(alerts),
 );

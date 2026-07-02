@@ -7,7 +7,6 @@ import {
   nfts, 
   nft_transfers, 
   admin_events,
-  alerts,
   ops_router_events,
   direct_engine_admin_call_events,
   admin_config_events,
@@ -24,6 +23,7 @@ import {
   FINAL_ADMIN_ADDRESS,
   TREASURY_ADDRESS,
 } from "../config/contracts";
+import { emitAlert } from "./rule-engine/engine";
 
 // Dynamic chainId lookup from environment
 const chainId = Number(process.env.CHAIN_ID || "8453");
@@ -32,6 +32,12 @@ const NARA_UNIT = 10n ** 18n;
 const epochLengthSeconds = BigInt(process.env.V4_EPOCH_LENGTH_SECONDS || "900");
 const whaleLockedAmount = BigInt(process.env.WALLET_WHALE_LOCKED_AMOUNT_WEI || "100000000000000000000000");
 const largeOutgoingTransferAmount = BigInt(process.env.WALLET_LARGE_OUTGOING_TRANSFER_WEI || "100000000000000000000000");
+const largeTreasuryWithdrawalAmount = BigInt(process.env.ALERT_LARGE_TREASURY_WITHDRAWAL_WEI || "1000000000000000000");
+const largeUnlock24hAmount = BigInt(process.env.ALERT_LARGE_UNLOCK_24H_WEI || "10000000000000000000000");
+const largeUnlock7dAmount = BigInt(process.env.ALERT_LARGE_UNLOCK_7D_WEI || "25000000000000000000000");
+const mediumUnlockAmount = BigInt(process.env.ALERT_MEDIUM_UNLOCK_WEI || "1000000000000000000000");
+const highConvictionScoreThreshold = BigInt(process.env.ALERT_HIGH_CONVICTION_SCORE || "10000");
+const highRiskScoreThreshold = BigInt(process.env.ALERT_HIGH_RISK_SCORE || "500");
 const shortTermDurationEpochs = BigInt(process.env.WALLET_SHORT_TERM_DURATION_EPOCHS || "96");
 const longTermDurationEpochs = BigInt(process.env.WALLET_LONG_TERM_DURATION_EPOCHS || "2880");
 
@@ -448,6 +454,32 @@ function isApprovedEngineAdminCaller(caller: string): boolean {
   return path === "ops_router" || path === "break_glass";
 }
 
+function isKnownProtocolAddress(address: string): boolean {
+  const normalized = normalizeAddress(address);
+  const known = new Set([
+    normalizeAddress(CONTRACTS.token.address),
+    normalizeAddress(CONTRACTS.engine.address),
+    normalizeAddress(CONTRACTS.positionNft.address),
+    normalizeAddress(CONTRACTS.bondDepositoryNft.address),
+    normalizeAddress(CONTRACTS.bondVault.address),
+    normalizeAddress(CONTRACTS.opsVault.address),
+    approvedOpsRouter,
+    approvedBreakGlassSafe,
+  ]);
+
+  if (TREASURY_ADDRESS) known.add(normalizeAddress(TREASURY_ADDRESS));
+  if (FINAL_ADMIN_ADDRESS) known.add(normalizeAddress(FINAL_ADMIN_ADDRESS));
+  return known.has(normalized);
+}
+
+function isApprovedRouterCaller(address: string): boolean {
+  const normalized = normalizeAddress(address);
+  if (normalized === approvedBreakGlassSafe) return true;
+  if (FINAL_ADMIN_ADDRESS && normalized === normalizeAddress(FINAL_ADMIN_ADDRESS)) return true;
+  if (TREASURY_ADDRESS && normalized === normalizeAddress(TREASURY_ADDRESS)) return true;
+  return false;
+}
+
 async function insertAdminConfigEvent(context: any, values: any) {
   await context.db.insert(admin_config_events).values(values).onConflictDoNothing();
 }
@@ -479,6 +511,37 @@ async function recordOpsRouterEvent(
     logIndex: event.log.logIndex,
     timestamp,
   }).onConflictDoNothing();
+
+  if (!isApprovedRouterCaller(args.caller)) {
+    await emitAlert(context.db, {
+      ruleId: "unexpected_router_caller",
+      fingerprintParts: [eventType, args.caller],
+      txHash: event.transaction.hash,
+      blockNumber: event.block.number,
+      wallet: normalizeAddress(args.caller),
+      sourceTable: "ops_router_events",
+      sourceRowId: id,
+      observedValue: normalizeAddress(args.caller),
+      thresholdValue: "approved_router_operator",
+      timestamp,
+    });
+  }
+
+  if (eventType === "treasury_eth_fees_withdrawn" && args.amount >= largeTreasuryWithdrawalAmount) {
+    await emitAlert(context.db, {
+      ruleId: "large_treasury_withdrawal",
+      fingerprintParts: [args.to ?? "unknown", args.amount / largeTreasuryWithdrawalAmount],
+      txHash: event.transaction.hash,
+      blockNumber: event.block.number,
+      wallet: args.to ? normalizeAddress(args.to) : null,
+      amount: args.amount,
+      sourceTable: "ops_router_events",
+      sourceRowId: id,
+      observedValue: args.amount.toString(),
+      thresholdValue: largeTreasuryWithdrawalAmount.toString(),
+      timestamp,
+    });
+  }
 
   if (eventType in routerConfigEventFunctions) {
     await insertAdminConfigEvent(context, {
@@ -589,21 +652,35 @@ async function recordDirectEngineAdminCall(
   });
 
   if (!allowedCaller) {
-    const alertId = `${chainId}-direct-engine-admin-${event.transaction.hash}-${traceIndex}`;
-    const fingerprint = `direct-engine-admin:${role}:${functionName}:${caller}`;
+    const description = `${functionName} (${role}) was called on NARAEngine by ${caller}; approved callers are ${approvedOpsRouter} and ${approvedBreakGlassSafe}.`;
 
-    await context.db.insert(alerts).values({
-      id: alertId,
-      fingerprint,
-      severity: 5,
+    await emitAlert(context.db, {
       ruleId: "direct_engine_admin_call_unapproved",
-      title: "Unsafe direct NARAEngine admin call",
-      description: `${functionName} (${role}) was called on NARAEngine by ${caller}; approved callers are ${approvedOpsRouter} and ${approvedBreakGlassSafe}.`,
-      status: "open",
-      firstSeenAt: timestamp,
-      lastSeenAt: timestamp,
-      occurrenceCount: 1,
-    }).onConflictDoNothing();
+      fingerprintParts: [role, functionName, caller],
+      description,
+      txHash: event.transaction.hash,
+      blockNumber: event.block.number,
+      wallet: caller,
+      sourceTable: "direct_engine_admin_call_events",
+      sourceRowId: id,
+      observedValue: `${functionName}:${caller}`,
+      thresholdValue: `approved:${approvedOpsRouter},${approvedBreakGlassSafe}`,
+      timestamp,
+    });
+
+    await emitAlert(context.db, {
+      ruleId: "param_or_treasury_direct_call_unapproved",
+      fingerprintParts: [role, functionName, caller],
+      description,
+      txHash: event.transaction.hash,
+      blockNumber: event.block.number,
+      wallet: caller,
+      sourceTable: "direct_engine_admin_call_events",
+      sourceRowId: id,
+      observedValue: `${role}:${functionName}:${caller}`,
+      thresholdValue: "ops_router_or_break_glass",
+      timestamp,
+    });
   }
 
   await recordWalletActivity(context, event, caller, "direct_engine_admin_call", "NARAEngine", {
@@ -665,6 +742,29 @@ ponder.on("NARAToken:Transfer", async ({ event, context }) => {
     counterparty: event.args.to,
     suffix: "out",
   });
+  const senderScore = await context.db.find(wallet_position_scores, {
+    wallet: normalizeAddress(event.args.from),
+    chainId,
+  });
+  if (
+    senderScore &&
+    senderScore.convictionScore >= highConvictionScoreThreshold &&
+    event.args.value >= largeOutgoingTransferAmount
+  ) {
+    await emitAlert(context.db, {
+      ruleId: "large_outgoing_transfer_high_conviction",
+      fingerprintParts: [event.args.from, event.transaction.hash],
+      txHash: event.transaction.hash,
+      blockNumber: event.block.number,
+      wallet: normalizeAddress(event.args.from),
+      amount: event.args.value,
+      sourceTable: "erc20_transfers",
+      sourceRowId: id,
+      observedValue: `${event.args.value}:${senderScore.convictionScore}`,
+      thresholdValue: `${largeOutgoingTransferAmount}:${highConvictionScoreThreshold}`,
+      timestamp,
+    });
+  }
   await updateWalletScore(context.db, event.args.from, timestamp, {
     transferOutAmount: event.args.value,
     netTransferAmount: -event.args.value,
@@ -718,12 +818,94 @@ ponder.on("NARAEngine:Locked", async ({ event, context }) => {
 
   if (event.args.amount >= whaleLockedAmount) {
     await upsertWalletLabel(context.db, event.args.owner, "whale", "position_score", 90, "Wallet locked at or above the configured whale threshold.", event.block.number, timestamp);
+    await emitAlert(context.db, {
+      ruleId: "wallet_concentration_above_threshold",
+      fingerprintParts: [event.args.owner],
+      txHash: event.transaction.hash,
+      blockNumber: event.block.number,
+      wallet: normalizeAddress(event.args.owner),
+      positionId: event.args.positionId,
+      amount: event.args.amount,
+      viewName: "wallet_exposure_summary",
+      sourceTable: "locks",
+      sourceRowId: id,
+      observedValue: event.args.amount.toString(),
+      thresholdValue: whaleLockedAmount.toString(),
+      timestamp,
+    });
   }
   if (durationEpochs <= shortTermDurationEpochs) {
     await upsertWalletLabel(context.db, event.args.owner, "short_term_holder", "position_score", 80, "Wallet opened a short-duration lock.", event.block.number, timestamp);
+    await emitAlert(context.db, {
+      ruleId: "short_duration_lock_concentration",
+      fingerprintParts: [event.args.owner],
+      txHash: event.transaction.hash,
+      blockNumber: event.block.number,
+      wallet: normalizeAddress(event.args.owner),
+      positionId: event.args.positionId,
+      amount: event.args.amount,
+      viewName: "wallet_exposure_summary",
+      sourceTable: "locks",
+      sourceRowId: id,
+      observedValue: durationEpochs.toString(),
+      thresholdValue: shortTermDurationEpochs.toString(),
+      timestamp,
+    });
   }
   if (durationEpochs >= longTermDurationEpochs) {
     await upsertWalletLabel(context.db, event.args.owner, "long_term_holder", "position_score", 80, "Wallet opened a long-duration lock.", event.block.number, timestamp);
+  }
+
+  if (soonAmounts.unlocking24hAmount >= largeUnlock24hAmount) {
+    await emitAlert(context.db, {
+      ruleId: "large_unlock_24h",
+      fingerprintParts: [event.args.owner],
+      txHash: event.transaction.hash,
+      blockNumber: event.block.number,
+      wallet: normalizeAddress(event.args.owner),
+      positionId: event.args.positionId,
+      amount: soonAmounts.unlocking24hAmount,
+      viewName: "unlock_cliffs_24h",
+      sourceTable: "locks",
+      sourceRowId: id,
+      observedValue: soonAmounts.unlocking24hAmount.toString(),
+      thresholdValue: largeUnlock24hAmount.toString(),
+      timestamp,
+    });
+  } else if (soonAmounts.unlocking24hAmount >= mediumUnlockAmount) {
+    await emitAlert(context.db, {
+      ruleId: "medium_unlock_cliff",
+      fingerprintParts: [event.args.owner, event.args.positionId],
+      txHash: event.transaction.hash,
+      blockNumber: event.block.number,
+      wallet: normalizeAddress(event.args.owner),
+      positionId: event.args.positionId,
+      amount: soonAmounts.unlocking24hAmount,
+      viewName: "unlock_cliffs_24h",
+      sourceTable: "locks",
+      sourceRowId: id,
+      observedValue: soonAmounts.unlocking24hAmount.toString(),
+      thresholdValue: mediumUnlockAmount.toString(),
+      timestamp,
+    });
+  }
+
+  if (soonAmounts.unlocking7dAmount >= largeUnlock7dAmount) {
+    await emitAlert(context.db, {
+      ruleId: "large_unlock_7d",
+      fingerprintParts: [event.args.owner],
+      txHash: event.transaction.hash,
+      blockNumber: event.block.number,
+      wallet: normalizeAddress(event.args.owner),
+      positionId: event.args.positionId,
+      amount: soonAmounts.unlocking7dAmount,
+      viewName: "unlock_cliffs_7d",
+      sourceTable: "locks",
+      sourceRowId: id,
+      observedValue: soonAmounts.unlocking7dAmount.toString(),
+      thresholdValue: largeUnlock7dAmount.toString(),
+      timestamp,
+    });
   }
 });
 
@@ -959,6 +1141,7 @@ ponder.on("NARAPositionNFT:PositionMinted", async ({ event, context }) => {
       lastOwnerUpdateBlock: event.block.number,
       lastOwnerUpdateTimestamp: timestamp,
     });
+
   }
 
   await recordPositionEvent(context, event, "position_minted", {
@@ -999,12 +1182,99 @@ ponder.on("NARAPositionNFT:PositionMinted", async ({ event, context }) => {
 
   if (event.args.amount >= whaleLockedAmount) {
     await upsertWalletLabel(context.db, event.args.owner, "whale", "position_score", 90, "Wallet minted an NFT position at or above the configured whale threshold.", event.block.number, timestamp);
+    await emitAlert(context.db, {
+      ruleId: "wallet_concentration_above_threshold",
+      fingerprintParts: [event.args.owner],
+      txHash: event.transaction.hash,
+      blockNumber: event.block.number,
+      wallet: normalizeAddress(event.args.owner),
+      positionId: event.args.positionId,
+      tokenId,
+      amount: event.args.amount,
+      viewName: "wallet_exposure_summary",
+      sourceTable: "nfts",
+      sourceRowId: tokenId,
+      observedValue: event.args.amount.toString(),
+      thresholdValue: whaleLockedAmount.toString(),
+      timestamp,
+    });
   }
   if (BigInt(event.args.durationEpochs) <= shortTermDurationEpochs) {
     await upsertWalletLabel(context.db, event.args.owner, "short_term_holder", "position_score", 80, "Wallet minted a short-duration NFT position.", event.block.number, timestamp);
+    await emitAlert(context.db, {
+      ruleId: "short_duration_lock_concentration",
+      fingerprintParts: [event.args.owner],
+      txHash: event.transaction.hash,
+      blockNumber: event.block.number,
+      wallet: normalizeAddress(event.args.owner),
+      positionId: event.args.positionId,
+      tokenId,
+      amount: event.args.amount,
+      viewName: "wallet_exposure_summary",
+      sourceTable: "nfts",
+      sourceRowId: tokenId,
+      observedValue: event.args.durationEpochs.toString(),
+      thresholdValue: shortTermDurationEpochs.toString(),
+      timestamp,
+    });
   }
   if (BigInt(event.args.durationEpochs) >= longTermDurationEpochs) {
     await upsertWalletLabel(context.db, event.args.owner, "long_term_holder", "position_score", 80, "Wallet minted a long-duration NFT position.", event.block.number, timestamp);
+  }
+
+  if (soonAmounts.unlocking24hAmount >= largeUnlock24hAmount) {
+    await emitAlert(context.db, {
+      ruleId: "large_unlock_24h",
+      fingerprintParts: [event.args.owner],
+      txHash: event.transaction.hash,
+      blockNumber: event.block.number,
+      wallet: normalizeAddress(event.args.owner),
+      positionId: event.args.positionId,
+      tokenId,
+      amount: soonAmounts.unlocking24hAmount,
+      viewName: "unlock_cliffs_24h",
+      sourceTable: "nfts",
+      sourceRowId: tokenId,
+      observedValue: soonAmounts.unlocking24hAmount.toString(),
+      thresholdValue: largeUnlock24hAmount.toString(),
+      timestamp,
+    });
+  } else if (soonAmounts.unlocking24hAmount >= mediumUnlockAmount) {
+    await emitAlert(context.db, {
+      ruleId: "medium_unlock_cliff",
+      fingerprintParts: [event.args.owner, event.args.positionId],
+      txHash: event.transaction.hash,
+      blockNumber: event.block.number,
+      wallet: normalizeAddress(event.args.owner),
+      positionId: event.args.positionId,
+      tokenId,
+      amount: soonAmounts.unlocking24hAmount,
+      viewName: "unlock_cliffs_24h",
+      sourceTable: "nfts",
+      sourceRowId: tokenId,
+      observedValue: soonAmounts.unlocking24hAmount.toString(),
+      thresholdValue: mediumUnlockAmount.toString(),
+      timestamp,
+    });
+  }
+
+  if (soonAmounts.unlocking7dAmount >= largeUnlock7dAmount) {
+    await emitAlert(context.db, {
+      ruleId: "large_unlock_7d",
+      fingerprintParts: [event.args.owner],
+      txHash: event.transaction.hash,
+      blockNumber: event.block.number,
+      wallet: normalizeAddress(event.args.owner),
+      positionId: event.args.positionId,
+      tokenId,
+      amount: soonAmounts.unlocking7dAmount,
+      viewName: "unlock_cliffs_7d",
+      sourceTable: "nfts",
+      sourceRowId: tokenId,
+      observedValue: soonAmounts.unlocking7dAmount.toString(),
+      thresholdValue: largeUnlock7dAmount.toString(),
+      timestamp,
+    });
   }
 });
 
@@ -1100,6 +1370,21 @@ ponder.on("NARAPositionNFT:Transfer", async ({ event, context }) => {
       mintedAtTimestamp: timestamp,
       lastOwnerUpdateBlock: event.block.number,
       lastOwnerUpdateTimestamp: timestamp,
+    });
+
+    await emitAlert(context.db, {
+      ruleId: "nft_metadata_missing",
+      fingerprintParts: [tokenId],
+      txHash: event.transaction.hash,
+      blockNumber: event.block.number,
+      wallet: normalizeAddress(event.args.to),
+      tokenId,
+      viewName: "nft_without_position_metadata",
+      sourceTable: "nfts",
+      sourceRowId: tokenId,
+      observedValue: "positionId:null",
+      thresholdValue: "positionId:not_null",
+      timestamp,
     });
   }
 
@@ -1401,6 +1686,21 @@ ponder.on("NARAEngine:RoleGranted", async ({ event, context }) => {
     logIndex: event.log.logIndex,
     timestamp,
   });
+
+  if (!isKnownProtocolAddress(event.args.account)) {
+    await emitAlert(context.db, {
+      ruleId: "role_granted_to_unknown_address",
+      fingerprintParts: [event.args.role, event.args.account],
+      txHash: event.transaction.hash,
+      blockNumber: event.block.number,
+      wallet: normalizeAddress(event.args.account),
+      sourceTable: "admin_events",
+      sourceRowId: id,
+      observedValue: `${event.args.role}:${normalizeAddress(event.args.account)}`,
+      thresholdValue: "known_protocol_address",
+      timestamp,
+    });
+  }
 });
 
 ponder.on("NARAEngine:RoleRevoked", async ({ event, context }) => {
@@ -1420,6 +1720,7 @@ ponder.on("NARAEngine:RoleRevoked", async ({ event, context }) => {
     logIndex: event.log.logIndex,
     timestamp,
   });
+
 });
 
 ponder.on("NARAEngine:UintParameterSet", async ({ event, context }) => {
@@ -1439,6 +1740,7 @@ ponder.on("NARAEngine:UintParameterSet", async ({ event, context }) => {
     logIndex: event.log.logIndex,
     timestamp,
   });
+
 });
 
 // NARAEngine:RoleAdminChanged
@@ -1458,6 +1760,18 @@ ponder.on("NARAEngine:RoleAdminChanged", async ({ event, context }) => {
     blockNumber: event.block.number,
     txHash: event.transaction.hash,
     logIndex: event.log.logIndex,
+    timestamp,
+  });
+
+  await emitAlert(context.db, {
+    ruleId: "role_admin_changed",
+    fingerprintParts: [event.args.role, event.args.newAdminRole],
+    txHash: event.transaction.hash,
+    blockNumber: event.block.number,
+    sourceTable: "admin_events",
+    sourceRowId: id,
+    observedValue: `${event.args.previousAdminRole}:${event.args.newAdminRole}`,
+    thresholdValue: "role_admin_unchanged",
     timestamp,
   });
 });
