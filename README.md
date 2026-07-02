@@ -34,6 +34,7 @@ that router or `V4_BREAK_GLASS_SAFE` produce a severity 5 alert.
 
 ```bash
 npm run validate:v4-env
+npm run sync:abis
 npm test
 npm run codegen
 npm run typecheck

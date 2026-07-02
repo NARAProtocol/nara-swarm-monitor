@@ -13,16 +13,18 @@ import {
   admin_config_events,
 } from "ponder:schema";
 import {
+  CONTRACTS,
   BREAK_GLASS_SAFE_ADDRESS,
   ENGINE_OPS_ROUTER_ADDRESS,
 } from "../config/contracts";
 
 // Dynamic chainId lookup from environment
 const chainId = Number(process.env.CHAIN_ID || "8453");
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
 // Helper to upsert wallets in Drizzle style
 async function ensureWallet(db: any, address: string, blockNumber: bigint, timestamp: number) {
-  if (address === "0x0000000000000000000000000000000000000000") return;
+  if (address === ZERO_ADDRESS) return;
   await db.insert(wallets).values({
     address,
     firstSeenBlock: blockNumber,
@@ -252,7 +254,7 @@ ponder.on("NARAEngine:Locked", async ({ event, context }) => {
     id,
     chainId,
     lockId,
-    user: event.args.account,
+    user: event.args.owner,
     amount: event.args.amount,
     activationEpoch: event.args.activationEpoch,
     unlockEpoch: event.args.unlockEpoch,
@@ -264,7 +266,7 @@ ponder.on("NARAEngine:Locked", async ({ event, context }) => {
     timestamp,
   });
 
-  await ensureWallet(context.db, event.args.account, event.block.number, timestamp);
+  await ensureWallet(context.db, event.args.owner, event.block.number, timestamp);
 });
 
 ponder.on("NARAEngine:Unlocked", async ({ event, context }) => {
@@ -276,7 +278,7 @@ ponder.on("NARAEngine:Unlocked", async ({ event, context }) => {
     unlockedAtBlock: event.block.number,
     unlockedAtTimestamp: Number(event.block.timestamp),
     unlockTxHash: event.transaction.hash,
-    unlockTo: event.args.to,
+    unlockTo: event.args.owner,
   });
 });
 
@@ -287,7 +289,8 @@ ponder.on("NARAEngine:Extended", async ({ event, context }) => {
   const existing = await context.db.find(locks, { id });
   if (existing) {
     await context.db.update(locks, { id }).set({
-      unlockEpoch: existing.unlockEpoch + event.args.additionalEpochs,
+      unlockEpoch: event.args.newUnlockEpoch,
+      weight: event.args.newWeight,
     });
   }
 });
@@ -296,19 +299,37 @@ ponder.on("NARAEngine:RewardsClaimed", async ({ event, context }) => {
   const id = `${chainId}-${event.transaction.hash}-${event.log.logIndex}`;
   const timestamp = Number(event.block.timestamp);
 
-  await context.db.insert(claims).values({
-    id,
-    chainId,
-    user: event.args.account,
-    rewardToken: "0x0000000000000000000000000000000000000000", // ETH (zero address)
-    amount: event.args.amount,
-    naraFeeAmount: 0n,
-    tokenFeeAmount: 0n,
-    blockNumber: event.block.number,
-    txHash: event.transaction.hash,
-    logIndex: event.log.logIndex,
-    timestamp,
-  });
+  if (event.args.naraAmount !== 0n) {
+    await context.db.insert(claims).values({
+      id: `${id}-nara`,
+      chainId,
+      user: event.args.to,
+      rewardToken: CONTRACTS.token.address,
+      amount: event.args.naraAmount,
+      naraFeeAmount: 0n,
+      tokenFeeAmount: 0n,
+      blockNumber: event.block.number,
+      txHash: event.transaction.hash,
+      logIndex: event.log.logIndex,
+      timestamp,
+    });
+  }
+
+  if (event.args.ethAmount !== 0n) {
+    await context.db.insert(claims).values({
+      id: `${id}-eth`,
+      chainId,
+      user: event.args.to,
+      rewardToken: ZERO_ADDRESS,
+      amount: event.args.ethAmount,
+      naraFeeAmount: 0n,
+      tokenFeeAmount: 0n,
+      blockNumber: event.block.number,
+      txHash: event.transaction.hash,
+      logIndex: event.log.logIndex,
+      timestamp,
+    });
+  }
 });
 
 ponder.on("NARAEngine:TokenRewardsClaimed", async ({ event, context }) => {
@@ -318,7 +339,7 @@ ponder.on("NARAEngine:TokenRewardsClaimed", async ({ event, context }) => {
   await context.db.insert(claims).values({
     id,
     chainId,
-    user: event.args.account,
+    user: event.args.to,
     rewardToken: event.args.token,
     amount: event.args.amount,
     naraFeeAmount: 0n,
@@ -405,36 +426,54 @@ ponder.on("NARAPositionNFT:PositionMinted", async ({ event, context }) => {
   const tokenId = `${chainId}-${event.args.tokenId}`;
   const timestamp = Number(event.block.timestamp);
 
-  await context.db.insert(nfts).values({
-    tokenId,
-    chainId,
-    tokenIdRaw: event.args.tokenId,
-    positionId: event.args.positionId,
-    owner: event.args.to,
-    tier: 0,
-    isGenesis: 0,
-    isEternal: 0,
-    mintedAtBlock: event.block.number,
-    mintedAtTimestamp: timestamp,
-  });
+  const existing = await context.db.find(nfts, { tokenId });
+  if (existing) {
+    await context.db.update(nfts, { tokenId }).set({
+      positionId: event.args.positionId,
+      owner: event.args.owner,
+    });
+  } else {
+    await context.db.insert(nfts).values({
+      tokenId,
+      chainId,
+      tokenIdRaw: event.args.tokenId,
+      positionId: event.args.positionId,
+      owner: event.args.owner,
+      tier: 0,
+      isGenesis: 0,
+      isEternal: 0,
+      mintedAtBlock: event.block.number,
+      mintedAtTimestamp: timestamp,
+    });
+  }
 });
 
 ponder.on("NARAPositionNFT:GenesisPositionMinted", async ({ event, context }) => {
   const tokenId = `${chainId}-${event.args.tokenId}`;
   const timestamp = Number(event.block.timestamp);
 
-  await context.db.insert(nfts).values({
-    tokenId,
-    chainId,
-    tokenIdRaw: event.args.tokenId,
-    positionId: event.args.positionId,
-    owner: event.args.to,
-    tier: event.args.tier,
-    isGenesis: 1,
-    isEternal: event.args.eternal ? 1 : 0,
-    mintedAtBlock: event.block.number,
-    mintedAtTimestamp: timestamp,
-  });
+  const existing = await context.db.find(nfts, { tokenId });
+  if (existing) {
+    await context.db.update(nfts, { tokenId }).set({
+      positionId: event.args.positionId,
+      tier: event.args.tierId,
+      isGenesis: 1,
+      isEternal: event.args.eternal ? 1 : 0,
+    });
+  } else {
+    await context.db.insert(nfts).values({
+      tokenId,
+      chainId,
+      tokenIdRaw: event.args.tokenId,
+      positionId: event.args.positionId,
+      owner: ZERO_ADDRESS,
+      tier: event.args.tierId,
+      isGenesis: 1,
+      isEternal: event.args.eternal ? 1 : 0,
+      mintedAtBlock: event.block.number,
+      mintedAtTimestamp: timestamp,
+    });
+  }
 });
 
 ponder.on("NARAPositionNFT:Transfer", async ({ event, context }) => {
@@ -512,8 +551,7 @@ ponder.on("NARAEngine:UintParameterSet", async ({ event, context }) => {
     contractAddress: event.log.address,
     actor: event.transaction.from,
     target: event.args.parameter,
-    valueOld: event.args.oldValue.toString(),
-    valueNew: event.args.newValue.toString(),
+    valueNew: event.args.value.toString(),
     blockNumber: event.block.number,
     txHash: event.transaction.hash,
     logIndex: event.log.logIndex,
@@ -554,83 +592,7 @@ ponder.on("NARAEngine:AddressParameterSet", async ({ event, context }) => {
     contractAddress: event.log.address,
     actor: event.transaction.from,
     target: event.args.parameter,
-    valueOld: event.args.oldValue,
-    valueNew: event.args.newValue,
-    blockNumber: event.block.number,
-    txHash: event.transaction.hash,
-    logIndex: event.log.logIndex,
-    timestamp,
-  });
-});
-
-// NARAEngine:Paused
-ponder.on("NARAEngine:Paused", async ({ event, context }) => {
-  const id = `${chainId}-${event.transaction.hash}-${event.log.logIndex}`;
-  const timestamp = Number(event.block.timestamp);
-
-  await context.db.insert(admin_events).values({
-    id,
-    chainId,
-    eventType: "pause",
-    contractAddress: event.log.address,
-    actor: event.args.account,
-    blockNumber: event.block.number,
-    txHash: event.transaction.hash,
-    logIndex: event.log.logIndex,
-    timestamp,
-  });
-});
-
-// NARAEngine:Unpaused
-ponder.on("NARAEngine:Unpaused", async ({ event, context }) => {
-  const id = `${chainId}-${event.transaction.hash}-${event.log.logIndex}`;
-  const timestamp = Number(event.block.timestamp);
-
-  await context.db.insert(admin_events).values({
-    id,
-    chainId,
-    eventType: "unpause",
-    contractAddress: event.log.address,
-    actor: event.args.account,
-    blockNumber: event.block.number,
-    txHash: event.transaction.hash,
-    logIndex: event.log.logIndex,
-    timestamp,
-  });
-});
-
-// NARAEngine:Upgraded
-ponder.on("NARAEngine:Upgraded", async ({ event, context }) => {
-  const id = `${chainId}-${event.transaction.hash}-${event.log.logIndex}`;
-  const timestamp = Number(event.block.timestamp);
-
-  await context.db.insert(admin_events).values({
-    id,
-    chainId,
-    eventType: "upgrade",
-    contractAddress: event.log.address,
-    actor: event.transaction.from,
-    valueNew: event.args.implementation,
-    blockNumber: event.block.number,
-    txHash: event.transaction.hash,
-    logIndex: event.log.logIndex,
-    timestamp,
-  });
-});
-
-// NARAEngine:AdminChanged
-ponder.on("NARAEngine:AdminChanged", async ({ event, context }) => {
-  const id = `${chainId}-${event.transaction.hash}-${event.log.logIndex}`;
-  const timestamp = Number(event.block.timestamp);
-
-  await context.db.insert(admin_events).values({
-    id,
-    chainId,
-    eventType: "admin_change",
-    contractAddress: event.log.address,
-    actor: event.transaction.from,
-    valueOld: event.args.previousAdmin,
-    valueNew: event.args.newAdmin,
+    valueNew: event.args.value,
     blockNumber: event.block.number,
     txHash: event.transaction.hash,
     logIndex: event.log.logIndex,
@@ -862,7 +824,7 @@ ponder.on("NARABondVault:PulledToMarket", async ({ event, context }) => {
     chainId,
     eventType: "vault_pull",
     contractAddress: event.log.address,
-    actor: event.args.depository,
+    actor: event.args.market,
     valueNew: event.args.amount.toString(),
     blockNumber: event.block.number,
     txHash: event.transaction.hash,
@@ -881,7 +843,7 @@ ponder.on("NARABondVault:ReturnedFromMarket", async ({ event, context }) => {
     chainId,
     eventType: "vault_return",
     contractAddress: event.log.address,
-    actor: event.args.depository,
+    actor: event.args.market,
     valueNew: event.args.amount.toString(),
     blockNumber: event.block.number,
     txHash: event.transaction.hash,
@@ -982,7 +944,7 @@ ponder.on("NARAOpsVault:OwnershipTransferred", async ({ event, context }) => {
     chainId,
     eventType: "ownership_transfer",
     contractAddress: event.log.address,
-    actor: event.args.previousOwner,
+    actor: event.args.oldOwner,
     valueNew: event.args.newOwner,
     blockNumber: event.block.number,
     txHash: event.transaction.hash,
