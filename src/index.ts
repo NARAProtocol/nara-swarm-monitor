@@ -13,25 +13,41 @@ import {
   admin_config_events,
   position_claim_events,
   position_events,
+  wallet_activity_events,
+  wallet_labels,
+  wallet_position_scores,
 } from "ponder:schema";
 import {
   CONTRACTS,
   BREAK_GLASS_SAFE_ADDRESS,
   ENGINE_OPS_ROUTER_ADDRESS,
+  FINAL_ADMIN_ADDRESS,
+  TREASURY_ADDRESS,
 } from "../config/contracts";
 
 // Dynamic chainId lookup from environment
 const chainId = Number(process.env.CHAIN_ID || "8453");
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+const NARA_UNIT = 10n ** 18n;
+const epochLengthSeconds = BigInt(process.env.V4_EPOCH_LENGTH_SECONDS || "900");
+const whaleLockedAmount = BigInt(process.env.WALLET_WHALE_LOCKED_AMOUNT_WEI || "100000000000000000000000");
+const largeOutgoingTransferAmount = BigInt(process.env.WALLET_LARGE_OUTGOING_TRANSFER_WEI || "100000000000000000000000");
+const shortTermDurationEpochs = BigInt(process.env.WALLET_SHORT_TERM_DURATION_EPOCHS || "96");
+const longTermDurationEpochs = BigInt(process.env.WALLET_LONG_TERM_DURATION_EPOCHS || "2880");
 
 // Helper to upsert wallets in Drizzle style
 async function ensureWallet(db: any, address: string, blockNumber: bigint, timestamp: number) {
-  if (address === ZERO_ADDRESS) return;
+  const wallet = normalizeAddress(address);
+  if (wallet === ZERO_ADDRESS) return;
   await db.insert(wallets).values({
-    address,
+    address: wallet,
     firstSeenBlock: blockNumber,
     lastUpdatedAt: timestamp,
   }).onConflictDoNothing();
+
+  await upsertWalletLabel(db, wallet, "user", "observed_activity", 60, "Wallet appeared in indexed v4 activity.", blockNumber, timestamp);
+  await ensureWalletScore(db, wallet, timestamp);
+  await labelKnownProtocolWallets(db, blockNumber, timestamp);
 }
 
 function stringifyMetadata(metadata: Record<string, unknown>): string {
@@ -40,6 +56,284 @@ function stringifyMetadata(metadata: Record<string, unknown>): string {
 
 function positionTokenId(tokenId: bigint): string {
   return `${chainId}-${tokenId}`;
+}
+
+function amountScore(amount: bigint): bigint {
+  return amount / NARA_UNIT;
+}
+
+function lockConvictionScore(
+  amount: bigint,
+  durationEpochs: bigint,
+  wrapped: boolean,
+  genesisRewardWeight: bigint,
+): bigint {
+  return amountScore(amount) + (durationEpochs * 10n) + (wrapped ? 100n : 0n) + amountScore(genesisRewardWeight);
+}
+
+function lockRiskScore(amount: bigint, durationEpochs: bigint, timestamp: number): bigint {
+  const estimatedUnlockTimestamp = BigInt(timestamp) + (durationEpochs * epochLengthSeconds);
+  let score = 0n;
+  if (durationEpochs <= shortTermDurationEpochs) score += 50n;
+  if (estimatedUnlockTimestamp <= BigInt(timestamp) + 86_400n) score += amountScore(amount);
+  else if (estimatedUnlockTimestamp <= BigInt(timestamp) + 604_800n) score += amountScore(amount) / 2n;
+  return score;
+}
+
+function unlockSoonAmounts(amount: bigint, durationEpochs: bigint, timestamp: number): { unlocking24hAmount: bigint; unlocking7dAmount: bigint } {
+  const estimatedUnlockTimestamp = BigInt(timestamp) + (durationEpochs * epochLengthSeconds);
+  const now = BigInt(timestamp);
+  if (estimatedUnlockTimestamp <= now + 86_400n) {
+    return { unlocking24hAmount: amount, unlocking7dAmount: amount };
+  }
+  if (estimatedUnlockTimestamp <= now + 604_800n) {
+    return { unlocking24hAmount: 0n, unlocking7dAmount: amount };
+  }
+  return { unlocking24hAmount: 0n, unlocking7dAmount: 0n };
+}
+
+async function ensureWalletScore(db: any, walletAddress: string, timestamp: number) {
+  const wallet = normalizeAddress(walletAddress);
+  if (wallet === ZERO_ADDRESS) return;
+
+  await db.insert(wallet_position_scores).values({
+    wallet,
+    chainId,
+    rawPositionCount: 0,
+    wrappedPositionCount: 0,
+    genesisPositionCount: 0,
+    lockedAmount: 0n,
+    activeLockedAmount: 0n,
+    unlockedAmount: 0n,
+    unlocking24hAmount: 0n,
+    unlocking7dAmount: 0n,
+    claimCount: 0,
+    claimNaraAmount: 0n,
+    claimEthAmount: 0n,
+    claimTokenAmount: 0n,
+    transferInAmount: 0n,
+    transferOutAmount: 0n,
+    netTransferAmount: 0n,
+    genesisRewardWeight: 0n,
+    avgLockDurationEpochs: 0n,
+    lastActivityTimestamp: timestamp,
+    riskScore: 0n,
+    convictionScore: 0n,
+    updatedAt: timestamp,
+  }).onConflictDoNothing();
+}
+
+async function updateWalletScore(db: any, walletAddress: string, timestamp: number, delta: {
+  rawPositionCount?: number;
+  wrappedPositionCount?: number;
+  genesisPositionCount?: number;
+  lockedAmount?: bigint;
+  activeLockedAmount?: bigint;
+  unlockedAmount?: bigint;
+  unlocking24hAmount?: bigint;
+  unlocking7dAmount?: bigint;
+  claimCount?: number;
+  claimNaraAmount?: bigint;
+  claimEthAmount?: bigint;
+  claimTokenAmount?: bigint;
+  transferInAmount?: bigint;
+  transferOutAmount?: bigint;
+  netTransferAmount?: bigint;
+  genesisRewardWeight?: bigint;
+  durationSampleEpochs?: bigint;
+  durationSampleCount?: number;
+  riskScore?: bigint;
+  convictionScore?: bigint;
+}) {
+  const wallet = normalizeAddress(walletAddress);
+  if (wallet === ZERO_ADDRESS) return;
+
+  const rawPositionCount = delta.rawPositionCount ?? 0;
+  const wrappedPositionCount = delta.wrappedPositionCount ?? 0;
+  const genesisPositionCount = delta.genesisPositionCount ?? 0;
+  const lockedAmount = delta.lockedAmount ?? 0n;
+  const activeLockedAmount = delta.activeLockedAmount ?? 0n;
+  const unlockedAmount = delta.unlockedAmount ?? 0n;
+  const unlocking24hAmount = delta.unlocking24hAmount ?? 0n;
+  const unlocking7dAmount = delta.unlocking7dAmount ?? 0n;
+  const claimCount = delta.claimCount ?? 0;
+  const claimNaraAmount = delta.claimNaraAmount ?? 0n;
+  const claimEthAmount = delta.claimEthAmount ?? 0n;
+  const claimTokenAmount = delta.claimTokenAmount ?? 0n;
+  const transferInAmount = delta.transferInAmount ?? 0n;
+  const transferOutAmount = delta.transferOutAmount ?? 0n;
+  const netTransferAmount = delta.netTransferAmount ?? 0n;
+  const genesisRewardWeight = delta.genesisRewardWeight ?? 0n;
+  const durationSampleEpochs = delta.durationSampleEpochs ?? 0n;
+  const durationSampleCount = delta.durationSampleCount ?? 0;
+  const riskScore = delta.riskScore ?? 0n;
+  const convictionScore = delta.convictionScore ?? 0n;
+
+  await db.insert(wallet_position_scores).values({
+    wallet,
+    chainId,
+    rawPositionCount,
+    wrappedPositionCount,
+    genesisPositionCount,
+    lockedAmount,
+    activeLockedAmount,
+    unlockedAmount,
+    unlocking24hAmount,
+    unlocking7dAmount,
+    claimCount,
+    claimNaraAmount,
+    claimEthAmount,
+    claimTokenAmount,
+    transferInAmount,
+    transferOutAmount,
+    netTransferAmount,
+    genesisRewardWeight,
+    avgLockDurationEpochs: durationSampleCount > 0 ? durationSampleEpochs / BigInt(durationSampleCount) : 0n,
+    lastActivityTimestamp: timestamp,
+    riskScore,
+    convictionScore,
+    updatedAt: timestamp,
+  }).onConflictDoUpdate((row: any) => {
+    const previousPositionCount = BigInt(row.rawPositionCount + row.wrappedPositionCount + row.genesisPositionCount);
+    const newDurationSamples = BigInt(durationSampleCount);
+    const avgLockDurationEpochs = newDurationSamples === 0n
+      ? row.avgLockDurationEpochs
+      : ((row.avgLockDurationEpochs * previousPositionCount) + durationSampleEpochs) / (previousPositionCount + newDurationSamples);
+
+    return {
+      rawPositionCount: row.rawPositionCount + rawPositionCount,
+      wrappedPositionCount: row.wrappedPositionCount + wrappedPositionCount,
+      genesisPositionCount: row.genesisPositionCount + genesisPositionCount,
+      lockedAmount: row.lockedAmount + lockedAmount,
+      activeLockedAmount: row.activeLockedAmount + activeLockedAmount,
+      unlockedAmount: row.unlockedAmount + unlockedAmount,
+      unlocking24hAmount: row.unlocking24hAmount + unlocking24hAmount,
+      unlocking7dAmount: row.unlocking7dAmount + unlocking7dAmount,
+      claimCount: row.claimCount + claimCount,
+      claimNaraAmount: row.claimNaraAmount + claimNaraAmount,
+      claimEthAmount: row.claimEthAmount + claimEthAmount,
+      claimTokenAmount: row.claimTokenAmount + claimTokenAmount,
+      transferInAmount: row.transferInAmount + transferInAmount,
+      transferOutAmount: row.transferOutAmount + transferOutAmount,
+      netTransferAmount: row.netTransferAmount + netTransferAmount,
+      genesisRewardWeight: row.genesisRewardWeight + genesisRewardWeight,
+      avgLockDurationEpochs,
+      lastActivityTimestamp: Math.max(row.lastActivityTimestamp, timestamp),
+      riskScore: row.riskScore + riskScore,
+      convictionScore: row.convictionScore + convictionScore,
+      updatedAt: timestamp,
+    };
+  });
+}
+
+async function upsertWalletLabel(
+  db: any,
+  walletAddress: string,
+  label: string,
+  source: string,
+  confidence: number,
+  reason: string,
+  blockNumber: bigint,
+  timestamp: number,
+) {
+  const wallet = normalizeAddress(walletAddress);
+  const id = `${chainId}-${wallet}-${label}-${source}`;
+
+  await db.insert(wallet_labels).values({
+    id,
+    chainId,
+    wallet,
+    label,
+    source,
+    confidence,
+    reason,
+    blockNumber,
+    timestamp,
+  }).onConflictDoUpdate({
+    confidence,
+    reason,
+    blockNumber,
+    timestamp,
+  });
+
+  if (wallet !== ZERO_ADDRESS) {
+    await ensureWalletScore(db, wallet, timestamp);
+  }
+}
+
+async function labelKnownProtocolWallets(db: any, blockNumber: bigint, timestamp: number) {
+  const contractLabels: Array<[string, string]> = [
+    [CONTRACTS.token.address, "NARA token contract"],
+    [CONTRACTS.engine.address, "NARAEngine contract"],
+    [CONTRACTS.positionNft.address, "NARAPositionNFTV4 contract"],
+    [CONTRACTS.bondDepositoryNft.address, "NARABondDepositoryV4NFT contract"],
+    [CONTRACTS.bondVault.address, "NARABondVaultV4 contract"],
+    [CONTRACTS.opsVault.address, "NARAOpsVaultV4 contract"],
+    [ENGINE_OPS_ROUTER_ADDRESS, "NARAEngineOpsRouterV1 contract"],
+  ];
+
+  for (const [address, reason] of contractLabels) {
+    await upsertWalletLabel(db, address, "contract", "protocol_config", 100, reason, blockNumber, timestamp);
+  }
+
+  await upsertWalletLabel(db, ENGINE_OPS_ROUTER_ADDRESS, "router", "protocol_config", 100, "Approved engine ops router.", blockNumber, timestamp);
+  await upsertWalletLabel(db, BREAK_GLASS_SAFE_ADDRESS, "break_glass", "protocol_config", 100, "Approved break glass Safe.", blockNumber, timestamp);
+  await upsertWalletLabel(db, CONTRACTS.opsVault.address, "ops", "protocol_config", 100, "Operations vesting vault.", blockNumber, timestamp);
+
+  if (TREASURY_ADDRESS) {
+    await upsertWalletLabel(db, TREASURY_ADDRESS, "treasury", "protocol_config", 100, "Configured v4 treasury address.", blockNumber, timestamp);
+  }
+  if (FINAL_ADMIN_ADDRESS) {
+    await upsertWalletLabel(db, FINAL_ADMIN_ADDRESS, "admin", "protocol_config", 100, "Configured final admin address.", blockNumber, timestamp);
+  }
+}
+
+async function recordWalletActivity(
+  context: any,
+  event: any,
+  walletAddress: string,
+  eventType: string,
+  source: string,
+  values: {
+    amount?: bigint | null;
+    token?: string | null;
+    positionId?: bigint | null;
+    tokenId?: string | null;
+    counterparty?: string | null;
+    index?: number;
+    suffix?: string;
+  } = {},
+) {
+  const wallet = normalizeAddress(walletAddress);
+  if (wallet === ZERO_ADDRESS) {
+    await upsertWalletLabel(context.db, wallet, "unknown", source, 100, "Zero address is an unknown placeholder, not a holder.", event.block.number, Number(event.block.timestamp));
+    return;
+  }
+
+  const timestamp = Number(event.block.timestamp);
+  const eventIndex = values.index ?? event.log?.logIndex ?? event.trace?.traceIndex ?? 0;
+  const suffix = values.suffix ?? "";
+  const id = `${chainId}-${event.transaction.hash}-${eventIndex}-${wallet}-${eventType}${suffix ? `-${suffix}` : ""}`;
+
+  await context.db.insert(wallet_activity_events).values({
+    id,
+    chainId,
+    wallet,
+    eventType,
+    source,
+    amount: values.amount ?? null,
+    token: values.token ? normalizeAddress(values.token) : null,
+    positionId: values.positionId ?? null,
+    tokenId: values.tokenId ?? null,
+    counterparty: values.counterparty ? normalizeAddress(values.counterparty) : null,
+    blockNumber: event.block.number,
+    blockHash: event.block.hash,
+    txHash: event.transaction.hash,
+    logIndex: eventIndex,
+    timestamp,
+  }).onConflictDoNothing();
+
+  await ensureWallet(context.db, wallet, event.block.number, timestamp);
 }
 
 async function recordPositionEvent(
@@ -209,6 +503,17 @@ async function recordOpsRouterEvent(
       timestamp,
     });
   }
+
+  await recordWalletActivity(context, event, event.log.address, `ops_router_${eventType}`, "NARAEngineOpsRouterV1", {
+    amount: args.amount ?? null,
+    counterparty: args.caller,
+    suffix: "router",
+  });
+  await recordWalletActivity(context, event, args.caller, `ops_router_caller_${eventType}`, "NARAEngineOpsRouterV1", {
+    amount: args.amount ?? null,
+    counterparty: event.log.address,
+    suffix: "caller",
+  });
 }
 
 async function recordDirectEngineAdminCall(
@@ -300,6 +605,24 @@ async function recordDirectEngineAdminCall(
       occurrenceCount: 1,
     }).onConflictDoNothing();
   }
+
+  await recordWalletActivity(context, event, caller, "direct_engine_admin_call", "NARAEngine", {
+    counterparty: engineAddress,
+    index: traceIndex,
+    suffix: functionName,
+  });
+  await updateWalletScore(context.db, caller, timestamp, {
+    riskScore: callPath === "unknown_direct" ? 1000n : callPath === "break_glass" ? 100n : 0n,
+  });
+
+  if (callPath === "ops_router") {
+    await upsertWalletLabel(context.db, caller, "router", "direct_engine_admin_call", 100, "Caller is the approved ops router.", event.block.number, timestamp);
+  } else if (callPath === "break_glass") {
+    await upsertWalletLabel(context.db, caller, "break_glass", "direct_engine_admin_call", 100, "Caller is the approved break glass Safe.", event.block.number, timestamp);
+  } else {
+    await upsertWalletLabel(context.db, caller, "unknown", "direct_engine_admin_call", 90, "Caller used a PARAM_ROLE or TREASURY_ROLE function outside approved router/break glass path.", event.block.number, timestamp);
+    await upsertWalletLabel(context.db, caller, "admin", "direct_engine_admin_call", 40, "Caller reached an engine admin function directly.", event.block.number, timestamp);
+  }
 }
 
 // 1. ERC20 Token Handlers
@@ -322,6 +645,31 @@ ponder.on("NARAToken:Transfer", async ({ event, context }) => {
 
   await ensureWallet(context.db, event.args.from, event.block.number, timestamp);
   await ensureWallet(context.db, event.args.to, event.block.number, timestamp);
+
+  await recordWalletActivity(context, event, event.args.to, "erc20_transfer_in", "NARAToken", {
+    amount: event.args.value,
+    token: CONTRACTS.token.address,
+    counterparty: event.args.from,
+    suffix: "in",
+  });
+  await updateWalletScore(context.db, event.args.to, timestamp, {
+    transferInAmount: event.args.value,
+    netTransferAmount: event.args.value,
+    convictionScore: amountScore(event.args.value) / 10n,
+    riskScore: 5n,
+  });
+
+  await recordWalletActivity(context, event, event.args.from, "erc20_transfer_out", "NARAToken", {
+    amount: event.args.value,
+    token: CONTRACTS.token.address,
+    counterparty: event.args.to,
+    suffix: "out",
+  });
+  await updateWalletScore(context.db, event.args.from, timestamp, {
+    transferOutAmount: event.args.value,
+    netTransferAmount: -event.args.value,
+    riskScore: event.args.value >= largeOutgoingTransferAmount ? 100n + amountScore(event.args.value) : 5n,
+  });
 });
 
 // 2. Engine Lock/Unlock/Claim Handlers
@@ -347,18 +695,60 @@ ponder.on("NARAEngine:Locked", async ({ event, context }) => {
   });
 
   await ensureWallet(context.db, event.args.owner, event.block.number, timestamp);
+
+  const durationEpochs = event.args.unlockEpoch - event.args.activationEpoch;
+  const soonAmounts = unlockSoonAmounts(event.args.amount, durationEpochs, timestamp);
+
+  await recordWalletActivity(context, event, event.args.owner, "lock", "NARAEngine", {
+    amount: event.args.amount,
+    token: CONTRACTS.token.address,
+    positionId: event.args.positionId,
+  });
+  await updateWalletScore(context.db, event.args.owner, timestamp, {
+    rawPositionCount: 1,
+    lockedAmount: event.args.amount,
+    activeLockedAmount: event.args.amount,
+    unlocking24hAmount: soonAmounts.unlocking24hAmount,
+    unlocking7dAmount: soonAmounts.unlocking7dAmount,
+    durationSampleEpochs: durationEpochs,
+    durationSampleCount: 1,
+    convictionScore: lockConvictionScore(event.args.amount, durationEpochs, false, 0n),
+    riskScore: lockRiskScore(event.args.amount, durationEpochs, timestamp),
+  });
+
+  if (event.args.amount >= whaleLockedAmount) {
+    await upsertWalletLabel(context.db, event.args.owner, "whale", "position_score", 90, "Wallet locked at or above the configured whale threshold.", event.block.number, timestamp);
+  }
+  if (durationEpochs <= shortTermDurationEpochs) {
+    await upsertWalletLabel(context.db, event.args.owner, "short_term_holder", "position_score", 80, "Wallet opened a short-duration lock.", event.block.number, timestamp);
+  }
+  if (durationEpochs >= longTermDurationEpochs) {
+    await upsertWalletLabel(context.db, event.args.owner, "long_term_holder", "position_score", 80, "Wallet opened a long-duration lock.", event.block.number, timestamp);
+  }
 });
 
 ponder.on("NARAEngine:Unlocked", async ({ event, context }) => {
   const lockId = event.args.positionId;
   const id = `${chainId}-${lockId}`;
+  const timestamp = Number(event.block.timestamp);
 
   await context.db.update(locks, { id }).set({
     status: "unlocked",
     unlockedAtBlock: event.block.number,
-    unlockedAtTimestamp: Number(event.block.timestamp),
+    unlockedAtTimestamp: timestamp,
     unlockTxHash: event.transaction.hash,
     unlockTo: event.args.owner,
+  });
+
+  await recordWalletActivity(context, event, event.args.owner, "unlock", "NARAEngine", {
+    amount: event.args.amount,
+    token: CONTRACTS.token.address,
+    positionId: event.args.positionId,
+  });
+  await updateWalletScore(context.db, event.args.owner, timestamp, {
+    activeLockedAmount: -event.args.amount,
+    unlockedAmount: event.args.amount,
+    riskScore: amountScore(event.args.amount) / 5n,
   });
 });
 
@@ -393,6 +783,13 @@ ponder.on("NARAEngine:RewardsClaimed", async ({ event, context }) => {
       logIndex: event.log.logIndex,
       timestamp,
     });
+
+    await recordWalletActivity(context, event, event.args.to, "claim_nara", "NARAEngine", {
+      amount: event.args.naraAmount,
+      token: CONTRACTS.token.address,
+      positionId: event.args.positionId,
+      suffix: "nara",
+    });
   }
 
   if (event.args.ethAmount !== 0n) {
@@ -408,6 +805,22 @@ ponder.on("NARAEngine:RewardsClaimed", async ({ event, context }) => {
       txHash: event.transaction.hash,
       logIndex: event.log.logIndex,
       timestamp,
+    });
+
+    await recordWalletActivity(context, event, event.args.to, "claim_eth", "NARAEngine", {
+      amount: event.args.ethAmount,
+      token: ZERO_ADDRESS,
+      positionId: event.args.positionId,
+      suffix: "eth",
+    });
+  }
+
+  if (event.args.naraAmount !== 0n || event.args.ethAmount !== 0n) {
+    await updateWalletScore(context.db, event.args.to, timestamp, {
+      claimCount: 1,
+      claimNaraAmount: event.args.naraAmount,
+      claimEthAmount: event.args.ethAmount,
+      convictionScore: 25n,
     });
   }
 });
@@ -428,6 +841,17 @@ ponder.on("NARAEngine:TokenRewardsClaimed", async ({ event, context }) => {
     txHash: event.transaction.hash,
     logIndex: event.log.logIndex,
     timestamp,
+  });
+
+  await recordWalletActivity(context, event, event.args.to, "claim_token", "NARAEngine", {
+    amount: event.args.amount,
+    token: event.args.token,
+    positionId: event.args.positionId,
+  });
+  await updateWalletScore(context.db, event.args.to, timestamp, {
+    claimCount: 1,
+    claimTokenAmount: event.args.amount,
+    convictionScore: 25n,
   });
 });
 
@@ -552,6 +976,36 @@ ponder.on("NARAPositionNFT:PositionMinted", async ({ event, context }) => {
 
   await ensureWallet(context.db, event.args.minter, event.block.number, timestamp);
   await ensureWallet(context.db, event.args.owner, event.block.number, timestamp);
+
+  const soonAmounts = unlockSoonAmounts(event.args.amount, BigInt(event.args.durationEpochs), timestamp);
+  await recordWalletActivity(context, event, event.args.owner, "position_minted", "NARAPositionNFT", {
+    amount: event.args.amount,
+    token: CONTRACTS.token.address,
+    positionId: event.args.positionId,
+    tokenId,
+  });
+  await updateWalletScore(context.db, event.args.owner, timestamp, {
+    wrappedPositionCount: 1,
+    lockedAmount: event.args.amount,
+    activeLockedAmount: event.args.amount,
+    unlocking24hAmount: soonAmounts.unlocking24hAmount,
+    unlocking7dAmount: soonAmounts.unlocking7dAmount,
+    durationSampleEpochs: BigInt(event.args.durationEpochs),
+    durationSampleCount: 1,
+    convictionScore: lockConvictionScore(event.args.amount, BigInt(event.args.durationEpochs), true, 0n),
+    riskScore: lockRiskScore(event.args.amount, BigInt(event.args.durationEpochs), timestamp),
+  });
+  await upsertWalletLabel(context.db, event.args.account, "contract", "position_minted", 70, "NARAPositionAccount clone that owns an engine position.", event.block.number, timestamp);
+
+  if (event.args.amount >= whaleLockedAmount) {
+    await upsertWalletLabel(context.db, event.args.owner, "whale", "position_score", 90, "Wallet minted an NFT position at or above the configured whale threshold.", event.block.number, timestamp);
+  }
+  if (BigInt(event.args.durationEpochs) <= shortTermDurationEpochs) {
+    await upsertWalletLabel(context.db, event.args.owner, "short_term_holder", "position_score", 80, "Wallet minted a short-duration NFT position.", event.block.number, timestamp);
+  }
+  if (BigInt(event.args.durationEpochs) >= longTermDurationEpochs) {
+    await upsertWalletLabel(context.db, event.args.owner, "long_term_holder", "position_score", 80, "Wallet minted a long-duration NFT position.", event.block.number, timestamp);
+  }
 });
 
 ponder.on("NARAPositionNFT:GenesisPositionMinted", async ({ event, context }) => {
@@ -602,6 +1056,22 @@ ponder.on("NARAPositionNFT:GenesisPositionMinted", async ({ event, context }) =>
       eternal: event.args.eternal,
     },
   });
+
+  if (existing?.owner && existing.owner !== ZERO_ADDRESS) {
+    await recordWalletActivity(context, event, existing.owner, "genesis_position_minted", "NARAPositionNFT", {
+      amount: event.args.rewardWeight,
+      positionId: event.args.positionId,
+      tokenId,
+    });
+    await updateWalletScore(context.db, existing.owner, timestamp, {
+      genesisPositionCount: 1,
+      genesisRewardWeight: event.args.rewardWeight,
+      convictionScore: 500n + amountScore(event.args.rewardWeight),
+    });
+    await upsertWalletLabel(context.db, existing.owner, "genesis_holder", "genesis_position_minted", 95, "Wallet owns an NFT with Genesis metadata.", event.block.number, timestamp);
+  } else {
+    await upsertWalletLabel(context.db, ZERO_ADDRESS, "unknown", "genesis_position_minted", 100, "Genesis owner unknown until ERC721 Transfer is indexed.", event.block.number, timestamp);
+  }
 });
 
 ponder.on("NARAPositionNFT:Transfer", async ({ event, context }) => {
@@ -658,6 +1128,33 @@ ponder.on("NARAPositionNFT:Transfer", async ({ event, context }) => {
 
   await ensureWallet(context.db, event.args.from, event.block.number, timestamp);
   await ensureWallet(context.db, event.args.to, event.block.number, timestamp);
+
+  await recordWalletActivity(context, event, event.args.to, "nft_transfer_in", "NARAPositionNFT", {
+    tokenId,
+    positionId: existing?.positionId ?? null,
+    counterparty: event.args.from,
+    suffix: "in",
+  });
+  await recordWalletActivity(context, event, event.args.from, "nft_transfer_out", "NARAPositionNFT", {
+    tokenId,
+    positionId: existing?.positionId ?? null,
+    counterparty: event.args.to,
+    suffix: "out",
+  });
+  await updateWalletScore(context.db, event.args.to, timestamp, {
+    convictionScore: existing?.isGenesis === 1 ? 100n : 25n,
+  });
+
+  if (existing?.isGenesis === 1 && event.args.to !== ZERO_ADDRESS) {
+    await upsertWalletLabel(context.db, event.args.to, "genesis_holder", "nft_transfer", 90, "Wallet received an NFT with Genesis metadata.", event.block.number, timestamp);
+    if (existing.owner === ZERO_ADDRESS) {
+      await updateWalletScore(context.db, event.args.to, timestamp, {
+        genesisPositionCount: 1,
+        genesisRewardWeight: existing.genesisRewardWeight ?? 0n,
+        convictionScore: 500n + amountScore(existing.genesisRewardWeight ?? 0n),
+      });
+    }
+  }
 });
 
 ponder.on("NARAPositionNFT:PositionRewardsClaimed", async ({ event, context }) => {
@@ -673,6 +1170,33 @@ ponder.on("NARAPositionNFT:PositionRewardsClaimed", async ({ event, context }) =
     naraAmount: event.args.naraAmount,
     ethAmount: event.args.ethAmount,
   });
+
+  if (event.args.naraAmount !== 0n) {
+    await recordWalletActivity(context, event, event.args.to, "position_claim_nara", "NARAPositionNFT", {
+      amount: event.args.naraAmount,
+      token: CONTRACTS.token.address,
+      positionId: event.args.positionId,
+      tokenId,
+      suffix: "nara",
+    });
+  }
+  if (event.args.ethAmount !== 0n) {
+    await recordWalletActivity(context, event, event.args.to, "position_claim_eth", "NARAPositionNFT", {
+      amount: event.args.ethAmount,
+      token: ZERO_ADDRESS,
+      positionId: event.args.positionId,
+      tokenId,
+      suffix: "eth",
+    });
+  }
+  if (event.args.naraAmount !== 0n || event.args.ethAmount !== 0n) {
+    await updateWalletScore(context.db, event.args.to, Number(event.block.timestamp), {
+      claimCount: 1,
+      claimNaraAmount: event.args.naraAmount,
+      claimEthAmount: event.args.ethAmount,
+      convictionScore: 25n,
+    });
+  }
 
   await ensureWallet(context.db, event.args.to, event.block.number, Number(event.block.timestamp));
 });
@@ -690,6 +1214,18 @@ ponder.on("NARAPositionNFT:PositionTokenRewardsClaimed", async ({ event, context
     tokenAmount: event.args.amount,
   });
 
+  await recordWalletActivity(context, event, event.args.to, "position_claim_token", "NARAPositionNFT", {
+    amount: event.args.amount,
+    token: event.args.token,
+    positionId: event.args.positionId,
+    tokenId,
+  });
+  await updateWalletScore(context.db, event.args.to, Number(event.block.timestamp), {
+    claimCount: 1,
+    claimTokenAmount: event.args.amount,
+    convictionScore: 25n,
+  });
+
   await ensureWallet(context.db, event.args.to, event.block.number, Number(event.block.timestamp));
 });
 
@@ -701,6 +1237,17 @@ ponder.on("NARAPositionNFT:ClosedPositionTokenRewardsClaimed", async ({ event, c
     to: event.args.to,
     rewardToken: event.args.token,
     tokenAmount: event.args.amount,
+  });
+
+  await recordWalletActivity(context, event, event.args.to, "closed_position_claim_token", "NARAPositionNFT", {
+    amount: event.args.amount,
+    token: event.args.token,
+    positionId: event.args.positionId,
+  });
+  await updateWalletScore(context.db, event.args.to, Number(event.block.timestamp), {
+    claimCount: 1,
+    claimTokenAmount: event.args.amount,
+    convictionScore: 25n,
   });
 
   await ensureWallet(context.db, event.args.to, event.block.number, Number(event.block.timestamp));
@@ -719,6 +1266,18 @@ ponder.on("NARAPositionNFT:GenesisEthClaimed", async ({ event, context }) => {
     ethAmount: event.args.amount,
   });
 
+  await recordWalletActivity(context, event, event.args.to, "genesis_claim_eth", "NARAPositionNFT", {
+    amount: event.args.amount,
+    token: ZERO_ADDRESS,
+    positionId: existing?.positionId ?? null,
+    tokenId,
+  });
+  await updateWalletScore(context.db, event.args.to, Number(event.block.timestamp), {
+    claimCount: 1,
+    claimEthAmount: event.args.amount,
+    convictionScore: 25n,
+  });
+
   await ensureWallet(context.db, event.args.to, event.block.number, Number(event.block.timestamp));
 });
 
@@ -735,6 +1294,18 @@ ponder.on("NARAPositionNFT:GenesisTokenClaimed", async ({ event, context }) => {
     tokenAmount: event.args.amount,
   });
 
+  await recordWalletActivity(context, event, event.args.to, "genesis_claim_token", "NARAPositionNFT", {
+    amount: event.args.amount,
+    token: "genesis_token",
+    positionId: existing?.positionId ?? null,
+    tokenId,
+  });
+  await updateWalletScore(context.db, event.args.to, Number(event.block.timestamp), {
+    claimCount: 1,
+    claimTokenAmount: event.args.amount,
+    convictionScore: 25n,
+  });
+
   await ensureWallet(context.db, event.args.to, event.block.number, Number(event.block.timestamp));
 });
 
@@ -748,6 +1319,14 @@ ponder.on("NARAPositionNFT:PositionUnlocked", async ({ event, context }) => {
     metadata: {
       to: event.args.to,
     },
+  });
+
+  await recordWalletActivity(context, event, event.args.to, "position_unlocked", "NARAPositionNFT", {
+    positionId: event.args.positionId,
+    tokenId,
+  });
+  await updateWalletScore(context.db, event.args.to, Number(event.block.timestamp), {
+    riskScore: 25n,
   });
 
   await ensureWallet(context.db, event.args.to, event.block.number, Number(event.block.timestamp));
@@ -766,6 +1345,17 @@ ponder.on("NARAPositionNFT:PositionExtended", async ({ event, context }) => {
       additionalEpochs: event.args.additionalEpochs,
     },
   });
+
+  if (existing?.owner && existing.owner !== ZERO_ADDRESS) {
+    await recordWalletActivity(context, event, existing.owner, "position_extended", "NARAPositionNFT", {
+      amount: BigInt(event.args.additionalEpochs),
+      positionId: event.args.positionId,
+      tokenId,
+    });
+    await updateWalletScore(context.db, existing.owner, Number(event.block.timestamp), {
+      convictionScore: BigInt(event.args.additionalEpochs) * 10n,
+    });
+  }
 });
 
 ponder.on("NARAPositionNFT:EternalGenesisBurned", async ({ event, context }) => {
@@ -780,6 +1370,16 @@ ponder.on("NARAPositionNFT:EternalGenesisBurned", async ({ event, context }) => 
       account: event.args.account,
       rewardWeightRemoved: event.args.rewardWeightRemoved,
     },
+  });
+
+  await recordWalletActivity(context, event, event.args.account, "eternal_genesis_burned", "NARAPositionNFT", {
+    amount: event.args.rewardWeightRemoved,
+    positionId: event.args.positionId,
+    tokenId,
+  });
+  await updateWalletScore(context.db, event.args.account, Number(event.block.timestamp), {
+    genesisRewardWeight: -event.args.rewardWeightRemoved,
+    riskScore: 50n,
   });
 });
 
@@ -1020,6 +1620,26 @@ ponder.on("NARABondDepositoryV4NFT:BondCreated", async ({ event, context }) => {
   });
 
   await ensureWallet(context.db, event.args.buyer, event.block.number, timestamp);
+  await ensureWallet(context.db, event.args.recipient, event.block.number, timestamp);
+
+  const tokenId = positionTokenId(event.args.tokenId);
+  await recordWalletActivity(context, event, event.args.buyer, "bond_created", "NARABondDepositoryV4NFT", {
+    amount: event.args.ethIn,
+    token: ZERO_ADDRESS,
+    positionId: event.args.positionId,
+    tokenId,
+    counterparty: event.args.recipient,
+    suffix: "buyer",
+  });
+  await recordWalletActivity(context, event, event.args.recipient, "bond_received", "NARABondDepositoryV4NFT", {
+    amount: event.args.payout,
+    token: CONTRACTS.token.address,
+    positionId: event.args.positionId,
+    tokenId,
+    counterparty: event.args.buyer,
+    suffix: "recipient",
+  });
+  await upsertWalletLabel(context.db, event.args.recipient, "genesis_holder", "bond_created", 80, "Wallet received a bond-created Genesis NFT position.", event.block.number, timestamp);
 });
 
 // NARABondDepositoryV4NFT:CapacityAdded
@@ -1214,6 +1834,15 @@ ponder.on("NARAOpsVault:Withdrawn", async ({ event, context }) => {
   });
 
   await ensureWallet(context.db, event.args.to, event.block.number, timestamp);
+  await recordWalletActivity(context, event, event.args.to, "ops_vault_withdraw", "NARAOpsVault", {
+    amount: event.args.amount,
+    token: CONTRACTS.token.address,
+    counterparty: event.log.address,
+  });
+  await updateWalletScore(context.db, event.args.to, timestamp, {
+    transferInAmount: event.args.amount,
+    netTransferAmount: event.args.amount,
+  });
 });
 
 // NARAOpsVault:OwnershipTransferred

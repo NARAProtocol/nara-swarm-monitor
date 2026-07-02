@@ -1,5 +1,6 @@
 import {
   and,
+  desc,
   eq,
   gte,
   inArray,
@@ -8,6 +9,7 @@ import {
   ne,
   onchainTable,
   onchainView,
+  primaryKey,
   sql,
 } from "ponder";
 
@@ -16,10 +18,21 @@ import {
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const configuredTreasuryAddress = (process.env.V4_TREASURY_ADDRESS || ZERO_ADDRESS).toLowerCase();
+const configuredOpsVaultAddress = (process.env.V4_OPS_VAULT || ZERO_ADDRESS).toLowerCase();
+const configuredFinalAdminAddress = (process.env.V4_FINAL_ADMIN || ZERO_ADDRESS).toLowerCase();
+const configuredBreakGlassAddress = (process.env.V4_BREAK_GLASS_SAFE || ZERO_ADDRESS).toLowerCase();
+const configuredRouterAddress = (process.env.V4_ENGINE_OPS_ROUTER || ZERO_ADDRESS).toLowerCase();
+const configuredTokenAddress = (process.env.V4_NARA_TOKEN || ZERO_ADDRESS).toLowerCase();
+const configuredEngineAddress = (process.env.V4_ENGINE || ZERO_ADDRESS).toLowerCase();
+const configuredPositionNftAddress = (process.env.V4_POSITION_NFT || ZERO_ADDRESS).toLowerCase();
+const configuredBondDepositoryNftAddress = (process.env.V4_BOND_DEPOSITORY_NFT || ZERO_ADDRESS).toLowerCase();
+const configuredBondVaultAddress = (process.env.V4_BOND_VAULT || ZERO_ADDRESS).toLowerCase();
 const epochLengthSeconds = Number(process.env.V4_EPOCH_LENGTH_SECONDS || "900");
 const whaleLockedAmountWei = process.env.WALLET_WHALE_LOCKED_AMOUNT_WEI || "100000000000000000000000";
+const largeOutgoingTransferWei = process.env.WALLET_LARGE_OUTGOING_TRANSFER_WEI || "100000000000000000000000";
 const epochLengthSecondsSql = sql.raw(String(epochLengthSeconds));
 const whaleLockedAmountSql = sql.raw(whaleLockedAmountWei);
+const largeOutgoingTransferSql = sql.raw(largeOutgoingTransferWei);
 const nowEpochSecondsSql = sql<number>`extract(epoch from now())::integer`;
 
 export const wallets = onchainTable("wallets", (t) => ({
@@ -206,6 +219,64 @@ export const position_events = onchainTable("position_events", (t) => ({
   to: t.text(),
   amount: t.bigint(),
   metadataJson: t.text(),
+  blockNumber: t.bigint().notNull(),
+  blockHash: t.text().notNull(),
+  txHash: t.text().notNull(),
+  logIndex: t.integer().notNull(),
+  timestamp: t.integer().notNull(),
+}));
+
+export const wallet_labels = onchainTable("wallet_labels", (t) => ({
+  id: t.text().primaryKey(),
+  chainId: t.integer().notNull(),
+  wallet: t.text().notNull(),
+  label: t.text().notNull(),
+  source: t.text().notNull(),
+  confidence: t.integer().notNull(),
+  reason: t.text().notNull(),
+  blockNumber: t.bigint().notNull(),
+  timestamp: t.integer().notNull(),
+}));
+
+export const wallet_position_scores = onchainTable("wallet_position_scores", (t) => ({
+  wallet: t.text().notNull(),
+  chainId: t.integer().notNull(),
+  rawPositionCount: t.integer().notNull(),
+  wrappedPositionCount: t.integer().notNull(),
+  genesisPositionCount: t.integer().notNull(),
+  lockedAmount: t.bigint().notNull(),
+  activeLockedAmount: t.bigint().notNull(),
+  unlockedAmount: t.bigint().notNull(),
+  unlocking24hAmount: t.bigint().notNull(),
+  unlocking7dAmount: t.bigint().notNull(),
+  claimCount: t.integer().notNull(),
+  claimNaraAmount: t.bigint().notNull(),
+  claimEthAmount: t.bigint().notNull(),
+  claimTokenAmount: t.bigint().notNull(),
+  transferInAmount: t.bigint().notNull(),
+  transferOutAmount: t.bigint().notNull(),
+  netTransferAmount: t.bigint().notNull(),
+  genesisRewardWeight: t.bigint().notNull(),
+  avgLockDurationEpochs: t.bigint().notNull(),
+  lastActivityTimestamp: t.integer().notNull(),
+  riskScore: t.bigint().notNull(),
+  convictionScore: t.bigint().notNull(),
+  updatedAt: t.integer().notNull(),
+}), (table) => ({
+  pk: primaryKey({ columns: [table.wallet, table.chainId] }),
+}));
+
+export const wallet_activity_events = onchainTable("wallet_activity_events", (t) => ({
+  id: t.text().primaryKey(),
+  chainId: t.integer().notNull(),
+  wallet: t.text().notNull(),
+  eventType: t.text().notNull(),
+  source: t.text().notNull(),
+  amount: t.bigint(),
+  token: t.text(),
+  positionId: t.bigint(),
+  tokenId: t.text(),
+  counterparty: t.text(),
   blockNumber: t.bigint().notNull(),
   blockHash: t.text().notNull(),
   txHash: t.text().notNull(),
@@ -693,4 +764,229 @@ export const position_owner_history = onchainView("position_owner_history").as((
   })
     .from(nft_transfers)
     .leftJoin(nfts, eq(nft_transfers.tokenId, nfts.tokenId)),
+);
+
+export const wallet_exposure_summary = onchainView("wallet_exposure_summary").as((qb) =>
+  qb.select({
+    wallet: position_current_state.owner,
+    chainId: position_current_state.chainId,
+    ownerStatus: position_current_state.ownerStatus,
+    walletType: sql<string>`case
+      when ${position_current_state.ownerStatus} = 'unknown_until_transfer' then 'unknown'
+      when lower(${position_current_state.owner}) = ${configuredTreasuryAddress} then 'treasury'
+      when coalesce(sum(${position_current_state.amount}) filter (where ${position_current_state.status} = 'locked'), 0) >= ${whaleLockedAmountSql} then 'whale'
+      else 'user'
+    end`,
+    rawPositionCount: sql<number>`count(*) filter (where ${position_current_state.isWrapped} = 0)`,
+    wrappedPositionCount: sql<number>`count(*) filter (where ${position_current_state.isWrapped} = 1)`,
+    genesisPositionCount: sql<number>`count(*) filter (where ${position_current_state.isGenesis} = 1)`,
+    lockedAmount: sql<bigint>`coalesce(sum(${position_current_state.amount}), 0)`,
+    activeLockedAmount: sql<bigint>`coalesce(sum(${position_current_state.amount}) filter (where ${position_current_state.status} = 'locked'), 0)`,
+    unlockedAmount: sql<bigint>`coalesce(sum(${position_current_state.amount}) filter (where ${position_current_state.status} = 'unlocked'), 0)`,
+    unlocking24hAmount: sql<bigint>`coalesce(sum(${position_current_state.amount}) filter (where ${position_current_state.status} = 'locked' and ${position_current_state.estimatedUnlockTimestamp} between ${nowEpochSecondsSql} and (${nowEpochSecondsSql} + 86400)), 0)`,
+    unlocking7dAmount: sql<bigint>`coalesce(sum(${position_current_state.amount}) filter (where ${position_current_state.status} = 'locked' and ${position_current_state.estimatedUnlockTimestamp} between ${nowEpochSecondsSql} and (${nowEpochSecondsSql} + 604800)), 0)`,
+    genesisRewardWeight: sql<bigint>`coalesce(sum(${position_current_state.genesisRewardWeight}), 0)`,
+    avgLockDurationEpochs: sql<bigint>`coalesce(avg(${position_current_state.durationEpochs})::bigint, 0)`,
+    activeWeight: sql<bigint>`coalesce(sum(${position_current_state.weight}) filter (where ${position_current_state.status} = 'locked'), 0)`,
+    lastActivityTimestamp: sql<number>`max(${position_current_state.timestamp})`,
+  })
+    .from(position_current_state)
+    .groupBy(position_current_state.owner, position_current_state.chainId, position_current_state.ownerStatus),
+);
+
+export const wallet_claim_summary = onchainView("wallet_claim_summary").as((qb) =>
+  qb.select({
+    wallet: position_claim_events.to,
+    chainId: position_claim_events.chainId,
+    claimCount: sql<number>`count(*)`,
+    claimNaraAmount: sql<bigint>`coalesce(sum(${position_claim_events.naraAmount}), 0)`,
+    claimEthAmount: sql<bigint>`coalesce(sum(${position_claim_events.ethAmount}), 0)`,
+    claimTokenAmount: sql<bigint>`coalesce(sum(${position_claim_events.tokenAmount}), 0)`,
+    firstClaimTimestamp: sql<number>`min(${position_claim_events.timestamp})`,
+    lastClaimTimestamp: sql<number>`max(${position_claim_events.timestamp})`,
+  })
+    .from(position_claim_events)
+    .groupBy(position_claim_events.to, position_claim_events.chainId),
+);
+
+export const wallet_transfer_summary = onchainView("wallet_transfer_summary").as((qb) =>
+  qb.select({
+    wallet: wallet_activity_events.wallet,
+    chainId: wallet_activity_events.chainId,
+    transferInAmount: sql<bigint>`coalesce(sum(${wallet_activity_events.amount}) filter (where ${wallet_activity_events.eventType} = 'erc20_transfer_in'), 0)`,
+    transferOutAmount: sql<bigint>`coalesce(sum(${wallet_activity_events.amount}) filter (where ${wallet_activity_events.eventType} = 'erc20_transfer_out'), 0)`,
+    netTransferAmount: sql<bigint>`coalesce(sum(case
+      when ${wallet_activity_events.eventType} = 'erc20_transfer_in' then ${wallet_activity_events.amount}
+      when ${wallet_activity_events.eventType} = 'erc20_transfer_out' then -${wallet_activity_events.amount}
+      else 0
+    end), 0)`,
+    transferInCount: sql<number>`count(*) filter (where ${wallet_activity_events.eventType} = 'erc20_transfer_in')`,
+    transferOutCount: sql<number>`count(*) filter (where ${wallet_activity_events.eventType} = 'erc20_transfer_out')`,
+    largeOutgoingTransferCount: sql<number>`count(*) filter (where ${wallet_activity_events.eventType} = 'erc20_transfer_out' and ${wallet_activity_events.amount} >= ${largeOutgoingTransferSql})`,
+    firstTransferTimestamp: sql<number>`min(${wallet_activity_events.timestamp})`,
+    lastTransferTimestamp: sql<number>`max(${wallet_activity_events.timestamp})`,
+  })
+    .from(wallet_activity_events)
+    .where(inArray(wallet_activity_events.eventType, ["erc20_transfer_in", "erc20_transfer_out"]))
+    .groupBy(wallet_activity_events.wallet, wallet_activity_events.chainId),
+);
+
+export const wallet_unlock_risk = onchainView("wallet_unlock_risk").as((qb) =>
+  qb.select({
+    wallet: position_current_state.owner,
+    chainId: position_current_state.chainId,
+    unlocking24hAmount: sql<bigint>`coalesce(sum(${position_current_state.amount}) filter (where ${position_current_state.estimatedUnlockTimestamp} between ${nowEpochSecondsSql} and (${nowEpochSecondsSql} + 86400)), 0)`,
+    unlocking7dAmount: sql<bigint>`coalesce(sum(${position_current_state.amount}) filter (where ${position_current_state.estimatedUnlockTimestamp} between ${nowEpochSecondsSql} and (${nowEpochSecondsSql} + 604800)), 0)`,
+    unlocking24hCount: sql<number>`count(*) filter (where ${position_current_state.estimatedUnlockTimestamp} between ${nowEpochSecondsSql} and (${nowEpochSecondsSql} + 86400))`,
+    unlocking7dCount: sql<number>`count(*) filter (where ${position_current_state.estimatedUnlockTimestamp} between ${nowEpochSecondsSql} and (${nowEpochSecondsSql} + 604800))`,
+    unlockRiskScore: sql<bigint>`(
+      (coalesce(sum(${position_current_state.amount}) filter (where ${position_current_state.estimatedUnlockTimestamp} between ${nowEpochSecondsSql} and (${nowEpochSecondsSql} + 86400)), 0) / 1000000000000000000) +
+      ((coalesce(sum(${position_current_state.amount}) filter (where ${position_current_state.estimatedUnlockTimestamp} between ${nowEpochSecondsSql} and (${nowEpochSecondsSql} + 604800)), 0) / 1000000000000000000) / 2)
+    )::bigint`,
+  })
+    .from(position_current_state)
+    .where(eq(position_current_state.status, "locked"))
+    .groupBy(position_current_state.owner, position_current_state.chainId),
+);
+
+export const wallet_genesis_power = onchainView("wallet_genesis_power").as((qb) =>
+  qb.select({
+    wallet: position_current_state.owner,
+    chainId: position_current_state.chainId,
+    genesisPositionCount: sql<number>`count(*)`,
+    eternalGenesisCount: sql<number>`count(*) filter (where ${position_current_state.isEternal} = 1)`,
+    genesisRewardWeight: sql<bigint>`coalesce(sum(${position_current_state.genesisRewardWeight}), 0)`,
+    genesisLockedAmount: sql<bigint>`coalesce(sum(${position_current_state.amount}) filter (where ${position_current_state.status} = 'locked'), 0)`,
+  })
+    .from(position_current_state)
+    .where(eq(position_current_state.isGenesis, 1))
+    .groupBy(position_current_state.owner, position_current_state.chainId),
+);
+
+export const wallet_admin_risk = onchainView("wallet_admin_risk").as((qb) =>
+  qb.select({
+    wallet: direct_engine_admin_call_events.caller,
+    chainId: direct_engine_admin_call_events.chainId,
+    directAdminCallCount: sql<number>`count(*)`,
+    unknownDirectAdminCallCount: sql<number>`count(*) filter (where ${direct_engine_admin_call_events.callPath} = 'unknown_direct')`,
+    maxSeverity: sql<number>`coalesce(max(${direct_engine_admin_call_events.severity}), 0)`,
+    adminRiskScore: sql<bigint>`(
+      (count(*) filter (where ${direct_engine_admin_call_events.callPath} = 'unknown_direct') * 1000) +
+      (count(*) filter (where ${direct_engine_admin_call_events.callPath} = 'break_glass') * 100)
+    )::bigint`,
+    lastAdminCallTimestamp: sql<number>`max(${direct_engine_admin_call_events.timestamp})`,
+  })
+    .from(direct_engine_admin_call_events)
+    .groupBy(direct_engine_admin_call_events.caller, direct_engine_admin_call_events.chainId),
+);
+
+export const wallet_current_profile = onchainView("wallet_current_profile").as((qb) =>
+  qb.select({
+    wallet: wallet_position_scores.wallet,
+    chainId: wallet_position_scores.chainId,
+    primaryLabel: sql<string>`case
+      when ${wallet_position_scores.wallet} = ${ZERO_ADDRESS} then 'unknown'
+      when lower(${wallet_position_scores.wallet}) = ${configuredTreasuryAddress} then 'treasury'
+      when lower(${wallet_position_scores.wallet}) = ${configuredRouterAddress} then 'router'
+      when lower(${wallet_position_scores.wallet}) = ${configuredBreakGlassAddress} then 'break_glass'
+      when lower(${wallet_position_scores.wallet}) = ${configuredFinalAdminAddress} then 'admin'
+      when lower(${wallet_position_scores.wallet}) = ${configuredOpsVaultAddress} then 'ops'
+      when lower(${wallet_position_scores.wallet}) in (${configuredTokenAddress}, ${configuredEngineAddress}, ${configuredPositionNftAddress}, ${configuredBondDepositoryNftAddress}, ${configuredBondVaultAddress}) then 'contract'
+      when ${wallet_position_scores.activeLockedAmount} >= ${whaleLockedAmountSql} then 'whale'
+      when ${wallet_position_scores.genesisPositionCount} > 0 then 'genesis_holder'
+      else 'user'
+    end`,
+    rawPositionCount: wallet_position_scores.rawPositionCount,
+    wrappedPositionCount: wallet_position_scores.wrappedPositionCount,
+    genesisPositionCount: wallet_position_scores.genesisPositionCount,
+    lockedAmount: wallet_position_scores.lockedAmount,
+    activeLockedAmount: wallet_position_scores.activeLockedAmount,
+    unlockedAmount: wallet_position_scores.unlockedAmount,
+    unlocking24hAmount: wallet_position_scores.unlocking24hAmount,
+    unlocking7dAmount: wallet_position_scores.unlocking7dAmount,
+    claimCount: wallet_position_scores.claimCount,
+    claimNaraAmount: wallet_position_scores.claimNaraAmount,
+    claimEthAmount: wallet_position_scores.claimEthAmount,
+    claimTokenAmount: wallet_position_scores.claimTokenAmount,
+    transferInAmount: wallet_position_scores.transferInAmount,
+    transferOutAmount: wallet_position_scores.transferOutAmount,
+    netTransferAmount: wallet_position_scores.netTransferAmount,
+    genesisRewardWeight: wallet_position_scores.genesisRewardWeight,
+    avgLockDurationEpochs: wallet_position_scores.avgLockDurationEpochs,
+    lastActivityTimestamp: wallet_position_scores.lastActivityTimestamp,
+    riskScore: sql<bigint>`(
+      ${wallet_position_scores.riskScore} +
+      (${wallet_position_scores.unlocking24hAmount} / 1000000000000000000) +
+      ((${wallet_position_scores.unlocking7dAmount} / 1000000000000000000) / 2)
+    )::bigint`,
+    convictionScore: sql<bigint>`(
+      ${wallet_position_scores.convictionScore} +
+      case
+        when ${wallet_position_scores.activeLockedAmount} > 0 and ${wallet_position_scores.lastActivityTimestamp} > 0
+        then greatest(0, ((${nowEpochSecondsSql} - ${wallet_position_scores.lastActivityTimestamp}) / 86400))::bigint * 10
+        else 0
+      end
+    )::bigint`,
+    updatedAt: wallet_position_scores.updatedAt,
+  }).from(wallet_position_scores),
+);
+
+export const wallet_whales = onchainView("wallet_whales").as((qb) =>
+  qb.select({
+    wallet: wallet_exposure_summary.wallet,
+    chainId: wallet_exposure_summary.chainId,
+    ownerStatus: wallet_exposure_summary.ownerStatus,
+    activeLockedAmount: wallet_exposure_summary.activeLockedAmount,
+    genesisRewardWeight: wallet_exposure_summary.genesisRewardWeight,
+    rawPositionCount: wallet_exposure_summary.rawPositionCount,
+    wrappedPositionCount: wallet_exposure_summary.wrappedPositionCount,
+  })
+    .from(wallet_exposure_summary)
+    .where(and(
+      gte(wallet_exposure_summary.activeLockedAmount, whaleLockedAmountSql),
+      ne(wallet_exposure_summary.ownerStatus, "unknown_until_transfer"),
+    )),
+);
+
+export const wallet_fresh_activity = onchainView("wallet_fresh_activity").as((qb) =>
+  qb.select({
+    wallet: wallet_activity_events.wallet,
+    chainId: wallet_activity_events.chainId,
+    firstActivityTimestamp: sql<number>`min(${wallet_activity_events.timestamp})`,
+    lastActivityTimestamp: sql<number>`max(${wallet_activity_events.timestamp})`,
+    activityCount: sql<number>`count(*)`,
+    fresh24hActivityCount: sql<number>`count(*) filter (where ${wallet_activity_events.timestamp} >= (${nowEpochSecondsSql} - 86400))`,
+    fresh7dActivityCount: sql<number>`count(*) filter (where ${wallet_activity_events.timestamp} >= (${nowEpochSecondsSql} - 604800))`,
+  })
+    .from(wallet_activity_events)
+    .groupBy(wallet_activity_events.wallet, wallet_activity_events.chainId),
+);
+
+export const wallet_conviction_ranking = onchainView("wallet_conviction_ranking").as((qb) =>
+  qb.select({
+    wallet: wallet_current_profile.wallet,
+    chainId: wallet_current_profile.chainId,
+    primaryLabel: wallet_current_profile.primaryLabel,
+    convictionScore: wallet_current_profile.convictionScore,
+    riskScore: wallet_current_profile.riskScore,
+    lockedAmount: wallet_current_profile.lockedAmount,
+    genesisRewardWeight: wallet_current_profile.genesisRewardWeight,
+  })
+    .from(wallet_current_profile)
+    .orderBy(desc(wallet_current_profile.convictionScore)),
+);
+
+export const wallet_risk_ranking = onchainView("wallet_risk_ranking").as((qb) =>
+  qb.select({
+    wallet: wallet_current_profile.wallet,
+    chainId: wallet_current_profile.chainId,
+    primaryLabel: wallet_current_profile.primaryLabel,
+    riskScore: wallet_current_profile.riskScore,
+    convictionScore: wallet_current_profile.convictionScore,
+    activeLockedAmount: wallet_current_profile.activeLockedAmount,
+    unlocking24hAmount: wallet_current_profile.unlocking24hAmount,
+    unlocking7dAmount: wallet_current_profile.unlocking7dAmount,
+  })
+    .from(wallet_current_profile)
+    .orderBy(desc(wallet_current_profile.riskScore)),
 );
