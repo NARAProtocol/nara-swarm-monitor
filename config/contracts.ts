@@ -5,7 +5,20 @@ import { NARABondDepositoryV4NFTAbi } from "../abis/NARABondDepositoryV4NFTAbi";
 import { NARABondVaultAbi } from "../abis/NARABondVaultAbi";
 import { NARAOpsVaultAbi } from "../abis/NARAOpsVaultAbi";
 import { NARAEngineOpsRouterV1Abi } from "../abis/NARAEngineOpsRouterV1Abi";
-import { requireFreshStartBlock, requireFreshV4Address } from "./addressGuards";
+import { requireFreshStartBlock, requireFreshV4Address, requireFreshV4Addresses } from "./addressGuards";
+import {
+  NARABasketFeeCollectorAbi,
+  NARABasketManagerAbi,
+  NARAFractionalFactoryAbi,
+  NARAFractionalPositionAbi,
+  NARALiquidityCompounderAbi,
+  NARALiquidityGrowthHookAbi,
+  NARALiquidityGrowthVaultAbi,
+  NARAStakingPoolAbi,
+  NARAStakingPoolSYAbi,
+  NARAGenesisRewardDistributorAbi,
+  NARABribeRouterAbi,
+} from "../abis/NARAEcosystemAbis";
 
 const startBlock = requireFreshStartBlock();
 
@@ -45,6 +58,16 @@ export const CONTRACTS = {
     abi: NARAEngineOpsRouterV1Abi,
     startBlock,
   },
+  stakingPool: { address: requireFreshV4Address("V4_STAKING_POOL"), abi: NARAStakingPoolAbi, startBlock },
+  stakingPoolSy: { address: requireFreshV4Address("V4_STAKING_POOL_SY"), abi: NARAStakingPoolSYAbi, startBlock },
+  fractionalFactory: { address: requireFreshV4Address("V4_FRACTIONAL_FACTORY"), abi: NARAFractionalFactoryAbi, childAbi: NARAFractionalPositionAbi, startBlock },
+  liquidityHook: { address: requireFreshV4Address("V4_LIQUIDITY_GROWTH_HOOK"), abi: NARALiquidityGrowthHookAbi, startBlock },
+  liquidityVault: { address: requireFreshV4Address("V4_LIQUIDITY_GROWTH_VAULT"), abi: NARALiquidityGrowthVaultAbi, startBlock },
+  liquidityCompounder: { address: requireFreshV4Address("V4_LIQUIDITY_COMPOUNDER"), abi: NARALiquidityCompounderAbi, startBlock },
+  basketManagers: { address: requireFreshV4Addresses("V4_BASKET_MANAGERS"), abi: NARABasketManagerAbi, startBlock },
+  basketFeeCollector: { address: requireFreshV4Address("V4_BASKET_FEE_COLLECTOR"), abi: NARABasketFeeCollectorAbi, startBlock },
+  genesisRewardDistributor: { address: requireFreshV4Address("V4_GENESIS_REWARD_DISTRIBUTOR"), abi: NARAGenesisRewardDistributorAbi, startBlock },
+  bribeRouter: { address: requireFreshV4Address("V4_BRIBE_ROUTER"), abi: NARABribeRouterAbi, startBlock },
 };
 
 export const ENGINE_OPS_ROUTER_ADDRESS = CONTRACTS.engineOpsRouter.address;

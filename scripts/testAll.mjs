@@ -8,3 +8,5 @@ import "./testAiSummarizer.mjs";
 import "./testNotifications.mjs";
 import "./testOperatorPackaging.mjs";
 import "./testEnvValidation.mjs";
+import "./testSurfaceCoverage.mjs";
+import "./testEcosystemAbiDrift.mjs";

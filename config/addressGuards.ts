@@ -51,6 +51,17 @@ export function requireFreshV4Address(name: string): `0x${string}` {
   return value;
 }
 
+export function requireFreshV4Addresses(name: string): readonly `0x${string}`[] {
+  const raw = requireEnv(name);
+  const values = raw.split(",").map((value) => value.trim()).filter(Boolean);
+  if (values.length === 0) throw new Error(`${name} must contain at least one fresh v4 address.`);
+  for (const value of values) assertAddress(name, value);
+  if (new Set(values.map((value) => value.toLowerCase())).size !== values.length) {
+    throw new Error(`${name} contains a duplicate address.`);
+  }
+  return values as readonly `0x${string}`[];
+}
+
 export function requireFreshStartBlock(): number {
   const raw = requireEnv("V4_START_BLOCK");
   const value = Number(raw);

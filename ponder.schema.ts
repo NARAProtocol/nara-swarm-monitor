@@ -156,6 +156,24 @@ export const liquidity_events = onchainTable("liquidity_events", (t) => ({
   timestamp: t.integer().notNull(),
 }));
 
+export const ecosystem_events = onchainTable("ecosystem_events", (t) => ({
+  id: t.text().primaryKey(),
+  chainId: t.integer().notNull(),
+  surface: t.text().notNull(),
+  contractAddress: t.text().notNull(),
+  eventType: t.text().notNull(),
+  actor: t.text(),
+  subject: t.text(),
+  amount0: t.bigint(),
+  amount1: t.bigint(),
+  metadata: t.text().notNull(),
+  blockNumber: t.bigint().notNull(),
+  blockHash: t.text().notNull(),
+  txHash: t.text().notNull(),
+  logIndex: t.integer().notNull(),
+  timestamp: t.integer().notNull(),
+}));
+
 export const admin_events = onchainTable("admin_events", (t) => ({
   id: t.text().primaryKey(),
   chainId: t.integer().notNull(),

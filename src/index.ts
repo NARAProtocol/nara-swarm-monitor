@@ -24,6 +24,7 @@ import {
   TREASURY_ADDRESS,
 } from "../config/contracts";
 import { emitAlert } from "./rule-engine/engine";
+import "./ecosystemIndex";
 
 // Dynamic chainId lookup from environment
 const chainId = Number(process.env.CHAIN_ID || "8453");
