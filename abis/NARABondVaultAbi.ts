@@ -250,6 +250,25 @@ export const NARABondVaultAbi = [
       {
         "indexed": true,
         "internalType": "address",
+        "name": "oldPreviousMarket",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "residualBalance",
+        "type": "uint256"
+      }
+    ],
+    "name": "PreviousMarketForceCleared",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
         "name": "market",
         "type": "address"
       },

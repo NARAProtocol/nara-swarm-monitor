@@ -249,6 +249,11 @@ export const NARABondDepositoryV4NFTAbi = [
   },
   {
     "inputs": [],
+    "name": "PriceDelayTooLong",
+    "type": "error"
+  },
+  {
+    "inputs": [],
     "name": "PriceDelayTooShort",
     "type": "error"
   },
