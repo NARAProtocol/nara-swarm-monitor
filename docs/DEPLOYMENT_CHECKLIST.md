@@ -29,10 +29,24 @@ Use this checklist before starting or restarting the monitor stack.
   - [ ] `V4_OPS_VAULT`
   - [ ] `V4_ENGINE_OPS_ROUTER`
   - [ ] `V4_BREAK_GLASS_SAFE`
+  - [ ] `V4_STAKING_POOL`
+  - [ ] `V4_STAKING_POOL_SY`
+  - [ ] `V4_FRACTIONAL_FACTORY`
+  - [ ] `V4_LIQUIDITY_GROWTH_HOOK`
+  - [ ] `V4_LIQUIDITY_GROWTH_VAULT`
+  - [ ] `V4_LIQUIDITY_COMPOUNDER`
+  - [ ] `V4_BASKET_FEE_COLLECTOR`
+  - [ ] `V4_BASKET_MANAGERS` contains at least one address
+  - [ ] `V4_GENESIS_REWARD_DISTRIBUTOR`
+  - [ ] `V4_BRIBE_ROUTER`
 - [ ] Optional address labels are set if known:
   - [ ] `V4_TREASURY_ADDRESS`
   - [ ] `V4_FINAL_ADMIN`
   - [ ] `DEPLOYER_ADDRESS`
+
+The full profile cannot start against the current Stage A deployment because
+several required contracts are intentionally deferred. Do not invent addresses
+or deploy unrelated components to satisfy this checklist.
 
 ## Address Safety
 

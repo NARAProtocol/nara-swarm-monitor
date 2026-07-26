@@ -25,8 +25,8 @@ Before changing monitor logic, read:
 - Never provide fallback addresses for protocol contracts.
 - Never use retired incident-stack addresses as defaults.
 - Never use the retired v3 token or engine addresses.
-- If an address is not known yet because the fresh redeploy has not happened,
-  leave it unset and let the monitor fail closed.
+- If an address is not known because that deferred component is not deployed,
+  leave it unset and let the full monitor profile fail closed.
 - `V4_START_BLOCK` is mandatory and must come from the fresh v4 deployment.
 - Hand-written ABIs are temporary only. Prefer generated ABIs from the active
   v4 Hardhat artifacts.

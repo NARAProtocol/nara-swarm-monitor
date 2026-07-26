@@ -59,6 +59,38 @@ retired incident-stack addresses.
 `V4_BREAK_GLASS_SAFE`
 : Approved break-glass Safe allowed to call engine admin functions directly.
 
+`V4_STAKING_POOL`
+: Required by the full profile. Fresh `NARAStakingPoolV4` address.
+
+`V4_STAKING_POOL_SY`
+: Required by the full profile. Fresh `NARAStakingPoolSYV4` address.
+
+`V4_FRACTIONAL_FACTORY`
+: Required by the full profile. Fresh `NARAFractionalPositionFactoryV4`
+address.
+
+`V4_LIQUIDITY_GROWTH_HOOK`
+: Required by the full profile. Fresh liquidity-growth hook address.
+
+`V4_LIQUIDITY_GROWTH_VAULT`
+: Required by the full profile. Fresh liquidity-growth vault address.
+
+`V4_LIQUIDITY_COMPOUNDER`
+: Required by the full profile. Fresh liquidity compounder address.
+
+`V4_BASKET_FEE_COLLECTOR`
+: Required by the full profile. Canonical basket V2 fee collector.
+
+`V4_BASKET_MANAGERS`
+: Required comma-separated list containing at least one fresh basket manager
+address.
+
+`V4_GENESIS_REWARD_DISTRIBUTOR`
+: Required by the full profile. Fresh Genesis reward distributor address.
+
+`V4_BRIBE_ROUTER`
+: Required by the full profile. Fresh `BribeRouterV4` address.
+
 `V4_TREASURY_ADDRESS`
 : Optional treasury label used by views and health checks.
 
@@ -77,13 +109,12 @@ retired incident-stack addresses.
 : Optional fresh v4 pool ID.
 
 `V4_LIQUIDITY_HOOK`
-: Optional fresh v4 liquidity hook address.
+: Optional legacy environment alias. Runtime indexing uses
+`V4_LIQUIDITY_GROWTH_HOOK`.
 
 `V4_LIQUIDITY_VAULT`
-: Optional fresh v4 liquidity vault address.
-
-`V4_LIQUIDITY_COMPOUNDER`
-: Optional fresh v4 liquidity compounder address.
+: Optional legacy environment alias. Runtime indexing uses
+`V4_LIQUIDITY_GROWTH_VAULT`.
 
 ## Notifications
 
@@ -159,4 +190,3 @@ the RPC client.
 `OZ_MONITOR_WEBHOOK_URL`
 : Optional external OpenZeppelin Monitor webhook placeholder. It is not part of
 the notification output v1 router.
-
