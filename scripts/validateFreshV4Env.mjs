@@ -34,6 +34,15 @@ const requiredAddresses = [
   "V4_OPS_VAULT",
   "V4_ENGINE_OPS_ROUTER",
   "V4_BREAK_GLASS_SAFE",
+  "V4_STAKING_POOL",
+  "V4_STAKING_POOL_SY",
+  "V4_FRACTIONAL_FACTORY",
+  "V4_LIQUIDITY_GROWTH_HOOK",
+  "V4_LIQUIDITY_GROWTH_VAULT",
+  "V4_LIQUIDITY_COMPOUNDER",
+  "V4_BASKET_FEE_COLLECTOR",
+  "V4_GENESIS_REWARD_DISTRIBUTOR",
+  "V4_BRIBE_ROUTER",
 ];
 
 const optionalAddresses = [
@@ -42,7 +51,6 @@ const optionalAddresses = [
   "DEPLOYER_ADDRESS",
   "V4_LIQUIDITY_HOOK",
   "V4_LIQUIDITY_VAULT",
-  "V4_LIQUIDITY_COMPOUNDER",
 ];
 
 const supportedNotificationChannels = new Set(["console", "webhook", "telegram", "discord", "email"]);
@@ -149,6 +157,30 @@ function assertAddress(name, required = true) {
   }
 }
 
+function assertAddressList(name) {
+  const values = valueOf(name)
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  if (values.length === 0) {
+    fail(`${name} must include at least one address.`);
+    return;
+  }
+  values.forEach((value, index) => {
+    const syntheticName = `${name}[${index}]`;
+    if (!/^0x[a-fA-F0-9]{40}$/.test(value)) {
+      fail(`${syntheticName} must be a 20-byte EVM address.`);
+      return;
+    }
+    const normalized = value.toLowerCase();
+    if (normalized === zeroAddress) {
+      fail(`${syntheticName} cannot be the zero address.`);
+    } else if (retiredAddresses.has(normalized)) {
+      fail(`${syntheticName} points to a retired NARA address. Fresh v4 redeploy only.`);
+    }
+  });
+}
+
 function assertNotificationConfig() {
   const rawChannels = valueOf("NOTIFY_CHANNELS") || "console";
   const channels = rawChannels
@@ -190,6 +222,7 @@ for (const name of optionalAddresses) {
   assertAddress(name, false);
 }
 
+assertAddressList("V4_BASKET_MANAGERS");
 assertNotificationConfig();
 
 if (process.exitCode) {

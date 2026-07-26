@@ -6,6 +6,19 @@ This project intentionally fails closed. Protocol contract addresses must be
 provided through environment variables after the fresh v4 deployment. Retired
 v3 addresses and retired incident-stack v4 addresses are blocked at startup.
 
+## Current Deployment Scope
+
+The 2026-07-26 Stage A deployment contains token, engine, reward reserve, hook,
+and vault only. The current Ponder configuration is a **full-protocol profile**
+and intentionally cannot start until every configured surface is deployed.
+Never fill missing variables with retired, zero, or invented addresses.
+
+The public launch scope is NARA Baskets only. Before basket monitoring can go
+live, add an explicit baskets/core monitoring profile or complete a reviewed
+refactor that conditionally registers only deployed contracts. Do not deploy
+position NFT, bond, router, or composability contracts merely to satisfy the
+monitor.
+
 ## Required Inputs
 
 Set these from the fresh v4 deployment only:
@@ -22,6 +35,16 @@ V4_BOND_VAULT=
 V4_OPS_VAULT=
 V4_ENGINE_OPS_ROUTER=
 V4_BREAK_GLASS_SAFE=
+V4_STAKING_POOL=
+V4_STAKING_POOL_SY=
+V4_FRACTIONAL_FACTORY=
+V4_LIQUIDITY_GROWTH_HOOK=
+V4_LIQUIDITY_GROWTH_VAULT=
+V4_LIQUIDITY_COMPOUNDER=
+V4_BASKET_MANAGERS=
+V4_BASKET_FEE_COLLECTOR=
+V4_GENESIS_REWARD_DISTRIBUTOR=
+V4_BRIBE_ROUTER=
 ```
 
 Do not use archived v3 addresses or retired incident-stack addresses.

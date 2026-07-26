@@ -57,6 +57,16 @@ Use active v4 concepts only:
 - Commander Agent v1 is deterministic read-only reporting.
 - AI Summarizer v1 only summarizes `commander_reports`.
 
+## Current Deployment Warning
+
+- The 2026-07-26 Stage A stack does not contain the full set expected by the
+  current Ponder configuration.
+- Do not invent or reuse addresses to make the full profile boot.
+- The public launch scope is baskets only. A dedicated baskets/core profile is
+  still required before production monitoring starts.
+- Do not deploy deferred position NFT, bond, router, lockboard, or composability
+  surfaces merely to satisfy the indexer.
+
 ## AI Boundaries
 
 - AI cannot invent evidence.
