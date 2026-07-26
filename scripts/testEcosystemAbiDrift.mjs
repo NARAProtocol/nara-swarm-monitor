@@ -1,10 +1,33 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 import { REQUIRED_MONITOR_SURFACES } from "../src/surfaceCoverage.mjs";
 
 const root = resolve(import.meta.dirname, "..");
-const workspace = resolve(root, "..");
+function findWorkspace(start) {
+  if (process.env.NARA_WORKSPACE_ROOT) {
+    const configured = resolve(process.env.NARA_WORKSPACE_ROOT);
+    if (
+      existsSync(resolve(configured, "nara-protocol-hardhat")) &&
+      existsSync(resolve(configured, "nara-category-baskets-v1"))
+    ) return configured;
+    throw new Error("NARA_WORKSPACE_ROOT does not contain both required source repositories.");
+  }
+
+  let candidate = resolve(start);
+  while (true) {
+    if (
+      existsSync(resolve(candidate, "nara-protocol-hardhat")) &&
+      existsSync(resolve(candidate, "nara-category-baskets-v1"))
+    ) return candidate;
+    const parent = dirname(candidate);
+    if (parent === candidate) break;
+    candidate = parent;
+  }
+  throw new Error("Unable to locate the NARA workspace; set NARA_WORKSPACE_ROOT.");
+}
+
+const workspace = findWorkspace(root);
 const abiText = readFileSync(resolve(root, "abis/NARAEcosystemAbis.ts"), "utf8");
 const handlerText = readFileSync(resolve(root, "src/ecosystemIndex.ts"), "utf8");
 
