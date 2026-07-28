@@ -93,4 +93,7 @@ time, and API config without secret values.
 `npm run test`
 : Runs seeded tests for ops-router monitoring, position intelligence, wallet
 intelligence, deterministic alerts, failed transaction scanner, Commander,
-AI summarizer, notifications, and operator packaging.
+AI summarizer, notifications, and operator packaging. ABI handlers are always
+checked against committed ABIs. Active Solidity source comparison also runs
+when the complete NARA workspace is available or `NARA_WORKSPACE_ROOT` points
+to it.
