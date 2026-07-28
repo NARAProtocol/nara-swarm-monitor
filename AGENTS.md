@@ -9,6 +9,11 @@ All GitHub-facing changes must follow
 inspect the staged diff, scan for secrets, and use a Conventional Commit.
 Documentation and repository status claims must match current code.
 
+The default branch is protected. Never push directly to `main` during routine
+work, even when administrator bypass is available. Create a focused branch,
+open a pull request, require the `verify` check to pass, resolve conversations,
+and squash merge. Administrator bypass is reserved for documented emergencies.
+
 ## Absolute Boundary
 
 The v3 protocol is dead and retired. Do not use, import, index, document, or
