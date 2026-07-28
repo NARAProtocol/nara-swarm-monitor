@@ -42,6 +42,21 @@ const targets = [
     artifact: "artifacts/contracts/v4/NARAOpsVaultV4.sol/NARAOpsVaultV4.json",
     output: "abis/NARAOpsVaultAbi.ts",
   },
+  {
+    exportName: "NARALiquidityGrowthHookAbi",
+    artifact: "artifacts/contracts/v4/NARALiquidityGrowthHook.sol/NARALiquidityGrowthHook.json",
+    output: "abis/NARALiquidityGrowthHookAbi.ts",
+  },
+  {
+    exportName: "NARALiquidityGrowthVaultAbi",
+    artifact: "artifacts/contracts/v4/NARALiquidityGrowthVault.sol/NARALiquidityGrowthVault.json",
+    output: "abis/NARALiquidityGrowthVaultAbi.ts",
+  },
+  {
+    exportName: "NARALiquidityCompounderAbi",
+    artifact: "artifacts/contracts/v4/NARALiquidityCompounderV4.sol/NARALiquidityCompounderV4.json",
+    output: "abis/NARALiquidityCompounderAbi.ts",
+  },
 ];
 
 for (const target of targets) {

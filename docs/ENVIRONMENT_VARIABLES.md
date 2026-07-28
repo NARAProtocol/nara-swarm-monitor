@@ -8,6 +8,10 @@ print key names and whether a key is present.
 `CHAIN_ID`
 : Chain ID for the monitor. Base mainnet is `8453`.
 
+`MONITOR_PROFILE`
+: `core` indexes the currently deployed token, engine, liquidity hook, vault,
+  and compounder. `full` additionally requires every deferred protocol surface.
+
 `BASE_RPC_URL`
 : Primary read-only RPC endpoint for Base.
 
@@ -70,13 +74,13 @@ retired incident-stack addresses.
 address.
 
 `V4_LIQUIDITY_GROWTH_HOOK`
-: Required by the full profile. Fresh liquidity-growth hook address.
+: Required by both profiles. Fresh liquidity-growth hook address.
 
 `V4_LIQUIDITY_GROWTH_VAULT`
-: Required by the full profile. Fresh liquidity-growth vault address.
+: Required by both profiles. Fresh liquidity-growth vault address.
 
 `V4_LIQUIDITY_COMPOUNDER`
-: Required by the full profile. Fresh liquidity compounder address.
+: Required by both profiles. Fresh liquidity compounder address.
 
 `V4_BASKET_FEE_COLLECTOR`
 : Required by the full profile. Canonical basket V2 fee collector.

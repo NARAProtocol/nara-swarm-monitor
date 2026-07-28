@@ -3,9 +3,15 @@ import { resolve } from "node:path";
 import pg from "pg";
 
 const zeroAddress = "0x0000000000000000000000000000000000000000";
-const requiredAddressKeys = [
+const coreRequiredAddressKeys = [
   "V4_NARA_TOKEN",
   "V4_ENGINE",
+  "V4_LIQUIDITY_GROWTH_HOOK",
+  "V4_LIQUIDITY_GROWTH_VAULT",
+  "V4_LIQUIDITY_COMPOUNDER",
+];
+const fullRequiredAddressKeys = [
+  ...coreRequiredAddressKeys,
   "V4_POSITION_NFT",
   "V4_BOND_DEPOSITORY_NFT",
   "V4_BOND_VAULT",
@@ -72,6 +78,9 @@ function envStatus(env) {
   for (const key of requiredCoreKeys) {
     if (!env[key]?.trim()) missing.push(key);
   }
+  const profile = (env.MONITOR_PROFILE || "full").trim().toLowerCase();
+  if (profile !== "core" && profile !== "full") invalid.push("MONITOR_PROFILE");
+  const requiredAddressKeys = profile === "core" ? coreRequiredAddressKeys : fullRequiredAddressKeys;
   for (const key of requiredAddressKeys) {
     const value = env[key]?.trim();
     if (!value) {
@@ -151,4 +160,3 @@ try {
 } finally {
   await client.end().catch(() => {});
 }
-

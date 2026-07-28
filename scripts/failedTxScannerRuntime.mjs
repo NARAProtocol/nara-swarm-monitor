@@ -16,6 +16,9 @@ export const ABI_TARGETS = [
   { contractName: "NARABondDepositoryV4NFT", exportName: "NARABondDepositoryV4NFTAbi", path: "abis/NARABondDepositoryV4NFTAbi.ts" },
   { contractName: "NARAOpsVaultV4", exportName: "NARAOpsVaultAbi", path: "abis/NARAOpsVaultAbi.ts" },
   { contractName: "NARAEngineOpsRouterV1", exportName: "NARAEngineOpsRouterV1Abi", path: "abis/NARAEngineOpsRouterV1Abi.ts" },
+  { contractName: "NARALiquidityGrowthHook", exportName: "NARALiquidityGrowthHookAbi", path: "abis/NARALiquidityGrowthHookAbi.ts" },
+  { contractName: "NARALiquidityGrowthVault", exportName: "NARALiquidityGrowthVaultAbi", path: "abis/NARALiquidityGrowthVaultAbi.ts" },
+  { contractName: "NARALiquidityCompounder", exportName: "NARALiquidityCompounderAbi", path: "abis/NARALiquidityCompounderAbi.ts" },
 ];
 
 const ENGINE_ADMIN_FUNCTIONS = new Set([
@@ -69,7 +72,7 @@ function stringifyMetadata(metadata) {
 
 function loadGeneratedAbi(target) {
   const source = readFileSync(resolve(monitorRoot, target.path), "utf8");
-  const match = source.match(new RegExp(`export const ${target.exportName} = ([\\s\\S]*) as const;`));
+  const match = source.match(new RegExp(`export const ${target.exportName} = ([\\s\\S]*?) as const;`));
   if (!match?.[1]) throw new Error(`Unable to parse generated ABI ${target.path}`);
   return JSON.parse(match[1]);
 }
@@ -528,15 +531,24 @@ export async function scanFailedTransactions({ client, chainId, fromBlock, toBlo
 }
 
 export function activeContractsFromEnv(env = process.env) {
-  const envTargets = [
+  const coreTargets = [
     ["V4_NARA_TOKEN", "NARAToken"],
     ["V4_ENGINE", "NARAEngine"],
+    ["V4_LIQUIDITY_GROWTH_HOOK", "NARALiquidityGrowthHook"],
+    ["V4_LIQUIDITY_GROWTH_VAULT", "NARALiquidityGrowthVault"],
+    ["V4_LIQUIDITY_COMPOUNDER", "NARALiquidityCompounder"],
+  ];
+  const fullTargets = [
+    ...coreTargets,
     ["V4_POSITION_NFT", "NARAPositionNFTV4"],
     ["V4_BOND_VAULT", "NARABondVaultV4"],
     ["V4_BOND_DEPOSITORY_NFT", "NARABondDepositoryV4NFT"],
     ["V4_OPS_VAULT", "NARAOpsVaultV4"],
     ["V4_ENGINE_OPS_ROUTER", "NARAEngineOpsRouterV1"],
   ];
+  const profile = (env.MONITOR_PROFILE || "full").trim().toLowerCase();
+  if (profile !== "core" && profile !== "full") throw new Error("MONITOR_PROFILE must be core or full.");
+  const envTargets = profile === "core" ? coreTargets : fullTargets;
   const missing = envTargets
     .filter(([envName]) => !env[envName] || normalizeAddress(env[envName]) === ZERO_ADDRESS)
     .map(([envName]) => envName);

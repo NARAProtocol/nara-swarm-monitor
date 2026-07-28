@@ -269,23 +269,33 @@ async function upsertWalletLabel(
 }
 
 async function labelKnownProtocolWallets(db: any, blockNumber: bigint, timestamp: number) {
-  const contractLabels: Array<[string, string]> = [
-    [CONTRACTS.token.address, "NARA token contract"],
-    [CONTRACTS.engine.address, "NARAEngine contract"],
-    [CONTRACTS.positionNft.address, "NARAPositionNFTV4 contract"],
-    [CONTRACTS.bondDepositoryNft.address, "NARABondDepositoryV4NFT contract"],
-    [CONTRACTS.bondVault.address, "NARABondVaultV4 contract"],
-    [CONTRACTS.opsVault.address, "NARAOpsVaultV4 contract"],
-    [ENGINE_OPS_ROUTER_ADDRESS, "NARAEngineOpsRouterV1 contract"],
-  ];
+  const contractLabels: Array<[string, string]> = [];
+  const appendContractLabels = (address: string | readonly string[], reason: string) => {
+    for (const value of typeof address === "string" ? [address] : address) {
+      contractLabels.push([value, reason]);
+    }
+  };
+  appendContractLabels(CONTRACTS.token.address, "NARA token contract");
+  appendContractLabels(CONTRACTS.engine.address, "NARAEngine contract");
+  appendContractLabels(CONTRACTS.positionNft.address, "NARAPositionNFTV4 contract");
+  appendContractLabels(CONTRACTS.bondDepositoryNft.address, "NARABondDepositoryV4NFT contract");
+  appendContractLabels(CONTRACTS.bondVault.address, "NARABondVaultV4 contract");
+  appendContractLabels(CONTRACTS.opsVault.address, "NARAOpsVaultV4 contract");
+  if (ENGINE_OPS_ROUTER_ADDRESS) appendContractLabels(ENGINE_OPS_ROUTER_ADDRESS, "NARAEngineOpsRouterV1 contract");
 
   for (const [address, reason] of contractLabels) {
     await upsertWalletLabel(db, address, "contract", "protocol_config", 100, reason, blockNumber, timestamp);
   }
 
-  await upsertWalletLabel(db, ENGINE_OPS_ROUTER_ADDRESS, "router", "protocol_config", 100, "Approved engine ops router.", blockNumber, timestamp);
-  await upsertWalletLabel(db, BREAK_GLASS_SAFE_ADDRESS, "break_glass", "protocol_config", 100, "Approved break glass Safe.", blockNumber, timestamp);
-  await upsertWalletLabel(db, CONTRACTS.opsVault.address, "ops", "protocol_config", 100, "Operations vesting vault.", blockNumber, timestamp);
+  if (ENGINE_OPS_ROUTER_ADDRESS) {
+    await upsertWalletLabel(db, ENGINE_OPS_ROUTER_ADDRESS, "router", "protocol_config", 100, "Approved engine ops router.", blockNumber, timestamp);
+  }
+  if (BREAK_GLASS_SAFE_ADDRESS) {
+    await upsertWalletLabel(db, BREAK_GLASS_SAFE_ADDRESS, "break_glass", "protocol_config", 100, "Approved break glass Safe.", blockNumber, timestamp);
+  }
+  for (const opsVaultAddress of typeof CONTRACTS.opsVault.address === "string" ? [CONTRACTS.opsVault.address] : CONTRACTS.opsVault.address) {
+    await upsertWalletLabel(db, opsVaultAddress, "ops", "protocol_config", 100, "Operations vesting vault.", blockNumber, timestamp);
+  }
 
   if (TREASURY_ADDRESS) {
     await upsertWalletLabel(db, TREASURY_ADDRESS, "treasury", "protocol_config", 100, "Configured v4 treasury address.", blockNumber, timestamp);
@@ -413,8 +423,8 @@ async function recordPositionClaimEvent(
   }).onConflictDoNothing();
 }
 
-const approvedOpsRouter = ENGINE_OPS_ROUTER_ADDRESS.toLowerCase();
-const approvedBreakGlassSafe = BREAK_GLASS_SAFE_ADDRESS.toLowerCase();
+const approvedOpsRouter = ENGINE_OPS_ROUTER_ADDRESS?.toLowerCase() ?? "";
+const approvedBreakGlassSafe = BREAK_GLASS_SAFE_ADDRESS?.toLowerCase() ?? "";
 
 const directEngineAdminFunctionRoles = {
   proposeConfig: "PARAM_ROLE",
@@ -457,16 +467,20 @@ function isApprovedEngineAdminCaller(caller: string): boolean {
 
 function isKnownProtocolAddress(address: string): boolean {
   const normalized = normalizeAddress(address);
-  const known = new Set([
-    normalizeAddress(CONTRACTS.token.address),
-    normalizeAddress(CONTRACTS.engine.address),
-    normalizeAddress(CONTRACTS.positionNft.address),
-    normalizeAddress(CONTRACTS.bondDepositoryNft.address),
-    normalizeAddress(CONTRACTS.bondVault.address),
-    normalizeAddress(CONTRACTS.opsVault.address),
-    approvedOpsRouter,
-    approvedBreakGlassSafe,
-  ]);
+  const known = new Set<string>();
+  const addConfigured = (configured: string | readonly string[]) => {
+    for (const value of typeof configured === "string" ? [configured] : configured) {
+      known.add(normalizeAddress(value));
+    }
+  };
+  addConfigured(CONTRACTS.token.address);
+  addConfigured(CONTRACTS.engine.address);
+  addConfigured(CONTRACTS.positionNft.address);
+  addConfigured(CONTRACTS.bondDepositoryNft.address);
+  addConfigured(CONTRACTS.bondVault.address);
+  addConfigured(CONTRACTS.opsVault.address);
+  if (approvedOpsRouter) known.add(approvedOpsRouter);
+  if (approvedBreakGlassSafe) known.add(approvedBreakGlassSafe);
 
   if (TREASURY_ADDRESS) known.add(normalizeAddress(TREASURY_ADDRESS));
   if (FINAL_ADMIN_ADDRESS) known.add(normalizeAddress(FINAL_ADMIN_ADDRESS));

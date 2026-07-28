@@ -49,6 +49,31 @@ function expectFail(result, pattern, message) {
 }
 
 expectPass(runValidation(), "valid seeded env passes");
+expectPass(
+  runValidation({
+    MONITOR_PROFILE: "core",
+    V4_POSITION_NFT: "",
+    V4_BOND_DEPOSITORY_NFT: "",
+    V4_BOND_VAULT: "",
+    V4_OPS_VAULT: "",
+    V4_ENGINE_OPS_ROUTER: "",
+    V4_BREAK_GLASS_SAFE: "",
+    V4_STAKING_POOL: "",
+    V4_STAKING_POOL_SY: "",
+    V4_FRACTIONAL_FACTORY: "",
+    V4_BASKET_FEE_COLLECTOR: "",
+    V4_GENESIS_REWARD_DISTRIBUTOR: "",
+    V4_BRIBE_ROUTER: "",
+    V4_BASKET_MANAGERS: "",
+  }),
+  "core profile passes without deferred surfaces",
+);
+expectFail(
+  runValidation({ MONITOR_PROFILE: "core", V4_LIQUIDITY_COMPOUNDER: "" }),
+  /V4_LIQUIDITY_COMPOUNDER/,
+  "core profile fails when a deployed core surface is missing",
+);
+expectFail(runValidation({ MONITOR_PROFILE: "invalid" }), /MONITOR_PROFILE/, "unknown monitor profile fails");
 expectFail(runValidation({ V4_EPOCH_LENGTH_SECONDS: "" }), /V4_EPOCH_LENGTH_SECONDS/, "missing epoch length fails");
 expectFail(runValidation({ V4_EPOCH_LENGTH_SECONDS: "0" }), /V4_EPOCH_LENGTH_SECONDS/, "zero epoch length fails");
 expectFail(runValidation({ V4_NARA_TOKEN: "0xE444de61752bD13D1D37Ee59c31ef4e489bd727C" }), /retired NARA address/, "retired v3 address fails");

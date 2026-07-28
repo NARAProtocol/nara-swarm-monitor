@@ -14,6 +14,7 @@ and sends operator-facing notifications.
 - A Postgres database available through `DATABASE_URL`.
 - A Base RPC URL in `BASE_RPC_URL`.
 - Fresh v4 contract addresses only.
+- `MONITOR_PROFILE=core` for the currently deployed surfaces.
 - `V4_START_BLOCK` from the fresh v4 deployment.
 - Generated ABIs from the active v4 Hardhat artifacts.
 - Ponder API reachable through `COMMANDER_SQL_URL` when running Commander,
@@ -47,8 +48,10 @@ Current validator command:
 npm run validate:v4-env
 ```
 
-The validator fails closed if required active v4 addresses are missing, zero, or
-retired.
+The validator fails closed if addresses required by the selected profile are
+missing, zero, or retired. The `core` profile requires token, engine, liquidity
+hook, liquidity vault, and liquidity compounder. The `full` profile requires
+all deferred surfaces too.
 
 It also requires `CHAIN_ID`, `BASE_RPC_URL`, `DATABASE_URL`,
 `V4_START_BLOCK`, and `V4_EPOCH_LENGTH_SECONDS`, validates optional configured

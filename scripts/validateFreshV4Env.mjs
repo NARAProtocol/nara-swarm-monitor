@@ -25,9 +25,16 @@ const retiredAddresses = new Set(
   ].map((address) => address.toLowerCase()),
 );
 
-const requiredAddresses = [
+const coreRequiredAddresses = [
   "V4_NARA_TOKEN",
   "V4_ENGINE",
+  "V4_LIQUIDITY_GROWTH_HOOK",
+  "V4_LIQUIDITY_GROWTH_VAULT",
+  "V4_LIQUIDITY_COMPOUNDER",
+];
+
+const fullRequiredAddresses = [
+  ...coreRequiredAddresses,
   "V4_POSITION_NFT",
   "V4_BOND_DEPOSITORY_NFT",
   "V4_BOND_VAULT",
@@ -37,9 +44,6 @@ const requiredAddresses = [
   "V4_STAKING_POOL",
   "V4_STAKING_POOL_SY",
   "V4_FRACTIONAL_FACTORY",
-  "V4_LIQUIDITY_GROWTH_HOOK",
-  "V4_LIQUIDITY_GROWTH_VAULT",
-  "V4_LIQUIDITY_COMPOUNDER",
   "V4_BASKET_FEE_COLLECTOR",
   "V4_GENESIS_REWARD_DISTRIBUTOR",
   "V4_BRIBE_ROUTER",
@@ -88,6 +92,7 @@ const fileEnv = shouldLoadEnvFiles
     }
   : {};
 const env = { ...fileEnv, ...process.env };
+const monitorProfile = (env.MONITOR_PROFILE?.trim().toLowerCase() || "full");
 
 function fail(message) {
   console.error(`Fresh v4 env validation failed: ${message}`);
@@ -209,12 +214,15 @@ assertHttpUrl("BASE_RPC_URL");
 assertDatabaseUrl("DATABASE_URL");
 assertPositiveInteger("V4_START_BLOCK", "from the fresh v4 deployment");
 assertPositiveInteger("V4_EPOCH_LENGTH_SECONDS", "for the deployed engine epoch length");
+if (monitorProfile !== "core" && monitorProfile !== "full") {
+  fail("MONITOR_PROFILE must be core or full.");
+}
 
 if (valueOf("API_READ_ONLY").toLowerCase() === "false") {
   fail("API_READ_ONLY cannot be false for the read-only monitor.");
 }
 
-for (const name of requiredAddresses) {
+for (const name of monitorProfile === "core" ? coreRequiredAddresses : fullRequiredAddresses) {
   assertAddress(name);
 }
 
@@ -222,7 +230,7 @@ for (const name of optionalAddresses) {
   assertAddress(name, false);
 }
 
-assertAddressList("V4_BASKET_MANAGERS");
+if (monitorProfile === "full") assertAddressList("V4_BASKET_MANAGERS");
 assertNotificationConfig();
 
 if (process.exitCode) {

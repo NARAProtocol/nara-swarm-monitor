@@ -16,6 +16,8 @@ Use this checklist before starting or restarting the monitor stack.
 ## Required Configuration
 
 - [ ] `CHAIN_ID` is set for the intended chain.
+- [ ] `MONITOR_PROFILE=core` for the current deployed stack, or `full` only
+      after every deferred address exists.
 - [ ] `BASE_RPC_URL` is configured.
 - [ ] `DATABASE_URL` is configured.
 - [ ] `V4_START_BLOCK` is set from the fresh v4 deployment.
@@ -23,6 +25,10 @@ Use this checklist before starting or restarting the monitor stack.
 - [ ] Fresh v4 contract addresses are set:
   - [ ] `V4_NARA_TOKEN`
   - [ ] `V4_ENGINE`
+  - [ ] `V4_LIQUIDITY_GROWTH_HOOK`
+  - [ ] `V4_LIQUIDITY_GROWTH_VAULT`
+  - [ ] `V4_LIQUIDITY_COMPOUNDER`
+- [ ] For `MONITOR_PROFILE=full`, the deferred addresses are also set:
   - [ ] `V4_POSITION_NFT`
   - [ ] `V4_BOND_DEPOSITORY_NFT`
   - [ ] `V4_BOND_VAULT`
@@ -32,9 +38,6 @@ Use this checklist before starting or restarting the monitor stack.
   - [ ] `V4_STAKING_POOL`
   - [ ] `V4_STAKING_POOL_SY`
   - [ ] `V4_FRACTIONAL_FACTORY`
-  - [ ] `V4_LIQUIDITY_GROWTH_HOOK`
-  - [ ] `V4_LIQUIDITY_GROWTH_VAULT`
-  - [ ] `V4_LIQUIDITY_COMPOUNDER`
   - [ ] `V4_BASKET_FEE_COLLECTOR`
   - [ ] `V4_BASKET_MANAGERS` contains at least one address
   - [ ] `V4_GENESIS_REWARD_DISTRIBUTOR`
@@ -44,9 +47,9 @@ Use this checklist before starting or restarting the monitor stack.
   - [ ] `V4_FINAL_ADMIN`
   - [ ] `DEPLOYER_ADDRESS`
 
-The full profile cannot start against the current Stage A deployment because
-several required contracts are intentionally deferred. Do not invent addresses
-or deploy unrelated components to satisfy this checklist.
+The `core` profile is the current production-compatible monitor scope. The
+`full` profile remains fail-closed while deferred contracts are absent. Do not
+invent addresses or deploy unrelated components to satisfy it.
 
 ## Address Safety
 

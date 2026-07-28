@@ -59,11 +59,11 @@ Use active v4 concepts only:
 
 ## Current Deployment Warning
 
-- The 2026-07-26 Stage A stack does not contain the full set expected by the
-  current Ponder configuration.
+- The current Ponder configuration supports `MONITOR_PROFILE=core` for the
+  deployed token, engine, liquidity hook, vault, and compounder.
 - Do not invent or reuse addresses to make the full profile boot.
 - The public launch scope is baskets only. A dedicated baskets/core profile is
-  still required before production monitoring starts.
+  required after basket manager and fee collector addresses are deployed.
 - Do not deploy deferred position NFT, bond, router, lockboard, or composability
   surfaces merely to satisfy the indexer.
 
