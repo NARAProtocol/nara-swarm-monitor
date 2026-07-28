@@ -18,6 +18,11 @@ git switch -c feat/short-description
 Recommended prefixes are `feat/`, `fix/`, `docs/`, `test/`, `refactor/`,
 `chore/`, and `security/`.
 
+The `main` branch is protected. Do not use administrator access for routine
+direct pushes. Push the focused branch, open a pull request, wait for the
+required `verify` check, resolve conversations, and squash merge. Zero external
+approvals are acceptable while the repository has only one active maintainer.
+
 ## Development and Verification
 
 ```bash
