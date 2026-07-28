@@ -5,6 +5,7 @@ const baseEnv = {
   ...process.env,
   NARA_ENV_VALIDATION_SKIP_FILES: "true",
   CHAIN_ID: "8453",
+  MONITOR_PROFILE: "full",
   BASE_RPC_URL: "https://mainnet.base.org",
   DATABASE_URL: "postgres://postgres:postgres@localhost:5432/nara_monitor",
   V4_START_BLOCK: "1",
