@@ -49,7 +49,7 @@ Every GitHub change follows this sequence:
 3. Make one coherent change without unrelated cleanup.
 4. Update code, tests, documentation, and configuration together.
 5. Run the canonical verification command.
-6. Inspect the diff and scan for secrets.
+6. Audit the locked dependency tree and scan for secrets.
 7. Commit using Conventional Commits.
 8. Push the branch and open a pull request from its template.
 9. Wait for required CI and review before merge.

@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process";
 const commands = [
   "check:docs",
   "check:secrets",
+  "check:dependencies",
   "validate:env",
   "test",
   "codegen",

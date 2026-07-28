@@ -21,16 +21,17 @@
     "monitor:health": "node scripts/monitorHealth.mjs",
     "check:docs": "node scripts/checkDocsDrift.mjs",
     "check:secrets": "node scripts/checkNoSecretLeakage.mjs",
+    "check:dependencies": "npm audit --audit-level=high",
     "verify": "node scripts/verifyRepository.mjs",
     "test": "node scripts/testAll.mjs",
     "lint": "eslint \"src/**/*.ts\" \"config/**/*.ts\" \"*.ts\"",
     "typecheck": "tsc"
   },
   "dependencies": {
-    "hono": "^4.5.0",
+    "hono": "^4.12.32",
     "pg": "^8.22.0",
-    "ponder": "^0.16.6",
-    "viem": "^2.21.3"
+    "ponder": "^0.16.10",
+    "viem": "^2.55.10"
   },
   "devDependencies": {
     "@types/node": "^20.9.0",
@@ -38,6 +39,20 @@
     "eslint": "^8.53.0",
     "eslint-config-ponder": "^0.16.6",
     "typescript": "^5.2.2"
+  },
+  "overrides": {
+    "@hono/node-server": "2.0.10",
+    "@typescript-eslint/typescript-estree": {
+      "minimatch": "9.0.7"
+    },
+    "brace-expansion": "5.0.8",
+    "drizzle-orm": "0.45.2",
+    "fast-uri": "3.1.4",
+    "glob": "13.0.6",
+    "kysely": "0.28.17",
+    "postcss": "8.5.18",
+    "vite": "6.4.3",
+    "ws": "8.21.1"
   },
   "engines": {
     "node": ">=18.14"
