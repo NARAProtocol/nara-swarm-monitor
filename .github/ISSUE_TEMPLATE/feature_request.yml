@@ -1,0 +1,43 @@
+name: Feature request
+description: Propose an improvement to the read-only v4 monitor.
+title: "feat: "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Operational problem
+      description: What verified operator or developer problem needs solving?
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Proposed outcome
+      description: Describe observable behavior, not a preferred implementation.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence and affected surfaces
+      description: Identify contracts, events, views, commands, or documentation.
+    validations:
+      required: true
+  - type: textarea
+    id: safety
+    attributes:
+      label: Security and read-only impact
+      description: Explain how the change preserves the monitor security boundary.
+    validations:
+      required: true
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope confirmation
+      options:
+        - label: This proposal targets the fresh v4 monitor.
+          required: true
+        - label: This proposal does not require private keys or protocol transactions.
+          required: true

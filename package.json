@@ -21,8 +21,9 @@
     "monitor:health": "node scripts/monitorHealth.mjs",
     "check:docs": "node scripts/checkDocsDrift.mjs",
     "check:secrets": "node scripts/checkNoSecretLeakage.mjs",
+    "verify": "node scripts/verifyRepository.mjs",
     "test": "node scripts/testAll.mjs",
-    "lint": "eslint .",
+    "lint": "eslint \"src/**/*.ts\" \"config/**/*.ts\" \"*.ts\"",
     "typecheck": "tsc"
   },
   "dependencies": {

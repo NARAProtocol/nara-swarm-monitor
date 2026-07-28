@@ -1,82 +1,168 @@
 # NARA Swarm Monitor
 
-V4-only Ponder monitor for the fresh NARA redeploy.
+[![CI](https://github.com/NARAProtocol/nara-swarm-monitor/actions/workflows/monitor-ci.yml/badge.svg)](https://github.com/NARAProtocol/nara-swarm-monitor/actions/workflows/monitor-ci.yml)
+[![Node.js](https://img.shields.io/badge/Node.js-20-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
+[![Base](https://img.shields.io/badge/network-Base-0052FF)](https://base.org/)
+[![Ponder](https://img.shields.io/badge/indexer-Ponder-111111)](https://ponder.sh/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 
-This project intentionally fails closed. Protocol contract addresses must be
-provided through environment variables after the fresh v4 deployment. Retired
-v3 addresses and retired incident-stack v4 addresses are blocked at startup.
+Read-only operations intelligence for the fresh NARA v4 protocol on Base.
 
-## Current Deployment Scope
+NARA Swarm Monitor indexes protocol events, derives operational signals, scans
+failed transactions, and exposes evidence through a read-only API. It is built
+to fail closed: an unknown, retired, or incomplete deployment configuration
+stops startup instead of silently monitoring the wrong contracts.
 
-The fresh deployment currently supports the explicit `core` profile: token,
-engine, liquidity hook, liquidity vault, and compounder. Set
-`MONITOR_PROFILE=core` to index only those deployed surfaces. Deferred contract
-sources remain configured with empty address lists, so they cannot accidentally
-index unrelated contracts.
+> [!IMPORTANT]
+> This repository monitors the fresh v4 deployment only. It does not send
+> protocol transactions, hold signing keys, or support retired v3 contracts.
 
-`MONITOR_PROFILE=full` remains fail-closed and requires every full-protocol
-address. Do not deploy position NFT, bond, router, or composability contracts
-merely to satisfy the monitor.
+## What It Does
 
-## Required Inputs
+- Indexes the active NARA token, engine, liquidity hook, vault, and compounder.
+- Builds deterministic protocol, wallet, position, treasury, and admin views.
+- Evaluates evidence-backed alert rules with deduplication.
+- Scans reverted transactions involving monitored contracts.
+- Produces structured Commander reports and deterministic AI summaries.
+- Routes notifications to console, Discord, Telegram, or generic webhooks.
+- Serves monitoring data through a bounded, read-only API.
 
-Set these from the fresh v4 deployment only:
+## Architecture
 
-```text
-CHAIN_ID=8453
-MONITOR_PROFILE=core
-BASE_RPC_URL=
-V4_START_BLOCK=
-V4_NARA_TOKEN=
-V4_ENGINE=
-V4_LIQUIDITY_GROWTH_HOOK=
-V4_LIQUIDITY_GROWTH_VAULT=
-V4_LIQUIDITY_COMPOUNDER=
-
-# Required only by MONITOR_PROFILE=full:
-V4_POSITION_NFT=
-V4_BOND_DEPOSITORY_NFT=
-V4_BOND_VAULT=
-V4_OPS_VAULT=
-V4_ENGINE_OPS_ROUTER=
-V4_BREAK_GLASS_SAFE=
-V4_STAKING_POOL=
-V4_STAKING_POOL_SY=
-V4_FRACTIONAL_FACTORY=
-V4_BASKET_MANAGERS=
-V4_BASKET_FEE_COLLECTOR=
-V4_GENESIS_REWARD_DISTRIBUTOR=
-V4_BRIBE_ROUTER=
+```mermaid
+flowchart LR
+    Base["Base RPC"] --> Ponder["Ponder indexer"]
+    Ponder --> Postgres[("PostgreSQL")]
+    Base --> Scanner["Failed transaction scanner"]
+    Scanner --> Postgres
+    Postgres --> Rules["Rule engine"]
+    Postgres --> Commander["Commander reports"]
+    Commander --> Summary["Deterministic summary"]
+    Rules --> Notify["Notification router"]
+    Summary --> Notify
+    Postgres --> API["Read-only API"]
 ```
 
-Do not use archived v3 addresses or retired incident-stack addresses.
+The indexer is the protocol's observation layer. Derived reports never replace
+onchain evidence; every operational conclusion is traceable to indexed state,
+events, or transaction receipts.
 
-Routine PARAM_ROLE and TREASURY_ROLE operations should flow through
-`V4_ENGINE_OPS_ROUTER`. Direct `NARAEngine` admin calls by any caller other than
-that router or `V4_BREAK_GLASS_SAFE` produce a severity 5 alert.
+## Deployment Profiles
 
-## Commands
+| Profile | Purpose | Required surfaces |
+| --- | --- | --- |
+| `core` | Current production-compatible profile | Token, engine, liquidity hook, liquidity vault, compounder |
+| `full` | Future complete protocol profile | Core plus position, bond, ops, staking, basket, genesis, and bribe surfaces |
+
+Deferred contracts use empty address lists in `core`. The monitor never invents
+placeholder production addresses or deploys contracts merely to satisfy its
+configuration.
+
+## Quick Start
+
+### Requirements
+
+- Node.js 20
+- npm 10 or later
+- PostgreSQL
+- A Base mainnet RPC endpoint
+
+### Install and verify
+
+```bash
+git clone https://github.com/NARAProtocol/nara-swarm-monitor.git
+cd nara-swarm-monitor
+npm ci
+cp .env.example .env.local
+```
+
+Populate `.env.local` with verified fresh-v4 deployment values, then run:
 
 ```bash
 npm run validate:v4-env
-npm run sync:abis
-npm test
 npm run codegen
 npm run typecheck
-npm run commander
-npm run summarize
+npm test
 npm run dev
 ```
 
-`npm run commander` is read-only. It expects a running Ponder API and reads from
-`COMMANDER_SQL_URL`, defaulting to `http://localhost:42069/sql`.
+The local Ponder API is available at `http://localhost:42069` by default.
+Environment files containing secrets are ignored by Git.
 
-`npm run summarize` is read-only with respect to protocol state. It reads the
-latest `commander_reports` row, uses `AI_SUMMARY_PROVIDER=local_stub` by default,
-prints a deterministic summary, and stores only an `ai_summaries` row through
-`DATABASE_URL`.
+## Operating the Monitor
 
-## Cold AI Warning
+Run the indexer:
 
-Read `AGENTS.md` before changing this monitor. The old v3 stack, jackpot,
-mining, and cron/keeper assumptions are not part of this fresh-start monitor.
+```bash
+npm run start
+```
+
+Run one read-only monitoring cycle:
+
+```bash
+npm run monitor:cycle
+```
+
+Check configuration, API, and database health:
+
+```bash
+npm run monitor:health
+```
+
+Preview a cycle without writing reports or sending notifications:
+
+```bash
+npm run monitor:cycle:dry-run
+```
+
+## Verification
+
+The complete local quality gate is:
+
+```bash
+npm run verify
+```
+
+It checks documentation drift, secret leakage, environment rules, deterministic
+test suites, generated Ponder types, and TypeScript correctness. CI runs the
+same gate on every push and pull request.
+
+## Documentation
+
+| Document | Use it for |
+| --- | --- |
+| [Architecture](docs/MONITOR_ARCHITECTURE.md) | Data flow, indexed tables, derived views, and agent boundaries |
+| [Environment variables](docs/ENVIRONMENT_VARIABLES.md) | Complete configuration reference |
+| [Operator runbook](docs/OPERATOR_RUNBOOK.md) | Startup order and routine operations |
+| [Deployment checklist](docs/DEPLOYMENT_CHECKLIST.md) | Production readiness and smoke checks |
+| [Recovery procedures](docs/RECOVERY_PROCEDURES.md) | Diagnosing and recovering from runtime failures |
+| [Command reference](docs/COMMANDS.md) | Every supported npm command |
+| [Repository standard](docs/GITHUB_REPOSITORY_STANDARD.md) | Required quality pattern for GitHub changes |
+| [Security policy](SECURITY.md) | Private vulnerability reporting |
+| [Contributing](CONTRIBUTING.md) | Branch, commit, testing, and pull-request rules |
+
+## Safety Model
+
+- Protocol addresses are environment-only and validated at startup.
+- Retired deployment addresses are explicitly blocked.
+- Private keys are neither requested nor supported.
+- API endpoints are read-only and enforce bounded result limits.
+- AI summaries explain deterministic evidence; they do not control protocol
+  state or independently determine alert severity.
+- ABI drift checks bind integrations to generated active-v4 artifacts.
+
+See [SECURITY.md](SECURITY.md) before reporting a vulnerability. Never include
+private keys, seed phrases, RPC credentials, or exploitable production details
+in a public issue.
+
+## Project Status
+
+The `core` profile is the active deployment profile. Basket-specific monitoring
+remains disabled until verified fresh basket manager and collector deployments
+exist. The `full` profile intentionally remains fail-closed until every required
+surface is available.
+
+## License
+
+No open-source license has been granted yet. All rights are reserved unless a
+license file is added by the repository owner.

@@ -44,8 +44,15 @@ stay aligned with `package.json` and `.env.example`.
 `npm run check:secrets`
 : Runs static and smoke checks that guard against printing secret env values.
 
+`npm run verify`
+: Runs the canonical pre-push and CI quality gate: documentation drift, secret
+leakage, environment validation, deterministic tests, Ponder code generation,
+ESLint, and TypeScript type checking. When `DATABASE_URL` is absent, this
+command uses a non-secret validation-only local URL; it does not connect to that
+database.
+
 `npm run lint`
-: Runs ESLint.
+: Runs ESLint across the TypeScript source and configuration files.
 
 ## Monitoring Cycle
 

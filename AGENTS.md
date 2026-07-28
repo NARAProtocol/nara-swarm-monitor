@@ -2,6 +2,13 @@
 
 This repository is v4-only.
 
+## GitHub Publishing Standard
+
+All GitHub-facing changes must follow
+`docs/GITHUB_REPOSITORY_STANDARD.md`. Before any push, run `npm run verify`,
+inspect the staged diff, scan for secrets, and use a Conventional Commit.
+Documentation and repository status claims must match current code.
+
 ## Absolute Boundary
 
 The v3 protocol is dead and retired. Do not use, import, index, document, or
