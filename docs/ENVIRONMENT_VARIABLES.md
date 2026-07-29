@@ -189,6 +189,26 @@ defined in code.
 : Optional scan upper bound. If omitted, the scanner uses the latest block from
 the RPC client.
 
+## Release Engineering Only
+
+These values are not monitor runtime configuration. Set them only from an
+approved cross-repository release handoff.
+
+`NARA_WORKSPACE_ROOT`
+: Absolute path to a workspace containing the expected
+`nara-protocol-hardhat` and `nara-category-baskets-v1` Git repositories.
+
+`NARA_PROTOCOL_ORIGIN_COMMIT`
+: Full 40-character merged commit from
+`NARAProtocol/nara_protocol_v4`. ABI synchronization and the pinned ecosystem
+drift gate verify that this commit is contained in the locally known
+`origin/main`.
+
+`NARA_BASKETS_ORIGIN_COMMIT`
+: Full 40-character merged commit from
+`NARAProtocol/nara_protocol_v4_baskets`. The pinned ecosystem drift gate
+verifies that this commit is contained in the locally known `origin/main`.
+
 ## Deprecated Or External
 
 `OZ_MONITOR_WEBHOOK_URL`

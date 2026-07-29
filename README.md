@@ -1,7 +1,7 @@
 # NARA Swarm Monitor
 
 [![CI](https://github.com/NARAProtocol/nara-swarm-monitor/actions/workflows/monitor-ci.yml/badge.svg)](https://github.com/NARAProtocol/nara-swarm-monitor/actions/workflows/monitor-ci.yml)
-[![Node.js](https://img.shields.io/badge/Node.js-20-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-22-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
 [![Base](https://img.shields.io/badge/network-Base-0052FF)](https://base.org/)
 [![Ponder](https://img.shields.io/badge/indexer-Ponder-111111)](https://ponder.sh/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
@@ -62,8 +62,8 @@ configuration.
 
 ### Requirements
 
-- Node.js 20
-- npm 10 or later
+- Node.js 22
+- npm 10.9.2
 - PostgreSQL
 - A Base mainnet RPC endpoint
 
@@ -124,8 +124,19 @@ npm run verify
 ```
 
 It checks documentation drift, secret leakage, environment rules, deterministic
-test suites, generated Ponder types, and TypeScript correctness. CI runs the
-same gate on every push and pull request.
+test suites, repository policy, locked dependencies, generated Ponder types,
+and TypeScript correctness. CI runs the same gate on every push and pull
+request.
+
+Maintainers can separately verify the live GitHub branch, Actions, CodeQL,
+Dependabot, secret-scanning, and private-reporting settings:
+
+```bash
+npm run audit:github-settings
+```
+
+That command is read-only and requires an authenticated GitHub CLI session with
+access to the repository settings.
 
 ## Documentation
 
@@ -137,6 +148,7 @@ same gate on every push and pull request.
 | [Deployment checklist](docs/DEPLOYMENT_CHECKLIST.md) | Production readiness and smoke checks |
 | [Recovery procedures](docs/RECOVERY_PROCEDURES.md) | Diagnosing and recovering from runtime failures |
 | [Command reference](docs/COMMANDS.md) | Every supported npm command |
+| [Repository governance](docs/REPOSITORY_GOVERNANCE.md) | Machine-enforced files and live GitHub settings |
 | [Repository standard](docs/GITHUB_REPOSITORY_STANDARD.md) | Required quality pattern for GitHub changes |
 | [Security policy](SECURITY.md) | Private vulnerability reporting |
 | [Contributing](CONTRIBUTING.md) | Branch, commit, testing, and pull-request rules |
@@ -157,10 +169,11 @@ in a public issue.
 
 ## Project Status
 
-The `core` profile is the active deployment profile. Basket-specific monitoring
-remains disabled until verified fresh basket manager and collector deployments
-exist. The `full` profile intentionally remains fail-closed until every required
-surface is available.
+The repository currently supports the `core` configuration profile. This source
+status does not assert that a hosted production monitor is running.
+Basket-specific monitoring remains disabled until verified fresh basket manager
+and collector deployments exist. The `full` profile intentionally remains
+fail-closed until every required surface is available.
 
 ## License
 

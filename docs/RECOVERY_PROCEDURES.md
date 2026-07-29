@@ -28,7 +28,10 @@ All recovery actions here are read-only with respect to protocol state.
    npm run start
    ```
 
-6. If decode errors remain, run `npm run sync:abis` and restart Ponder.
+6. If decode errors remain, stop the affected monitor release. Do not regenerate
+   ABIs on the runtime host. Reconcile the monitor on a release branch from the
+   full merged producer commit, run the pinned drift gate and complete
+   verification, then deploy or roll back through the normal release path.
 
 ## RPC Rate Limited
 
@@ -61,17 +64,24 @@ All recovery actions here are read-only with respect to protocol state.
 
 ## Missing ABI
 
-1. Confirm the active v4 Hardhat repo exists next to this repo.
-2. Run:
+1. Read the approved cross-repository handoff and record the full merged
+   producer commits.
+2. Fetch the producer remotes, set `NARA_WORKSPACE_ROOT`,
+   `NARA_PROTOCOL_ORIGIN_COMMIT`, and `NARA_BASKETS_ORIGIN_COMMIT`, then build
+   the exact clean protocol checkout.
+3. On the release-engineering checkout, run:
 
    ```bash
    npm run sync:abis
+   npm run check:ecosystem-drift
    npm run codegen
    npm run typecheck
    ```
 
-3. Verify the missing contract is active v4, not v3 or archived.
-4. If the active v4 artifact does not exist, stop and ask for the correct
+4. Review the generated ABI diff and verify the missing contract is active v4,
+   not v3 or archived.
+5. Merge through protected CI before changing a deployed monitor.
+6. If the active v4 artifact does not exist, stop and ask for the correct
    artifact source.
 
 ## Stale Commander Report

@@ -1,7 +1,6 @@
 import { spawnSync } from "node:child_process";
 
 const steps = [
-  ["sync:abis", "Sync generated active v4 ABIs"],
   ["validate:v4-env", "Validate fresh v4 environment"],
   ["scan:failed", "Scan failed active v4 transactions"],
   ["commander", "Generate deterministic Commander report"],
@@ -33,4 +32,3 @@ for (const [scriptName] of steps) {
     break;
   }
 }
-

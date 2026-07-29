@@ -54,6 +54,48 @@ function assertSecretExamplesBlank() {
   }
 }
 
+function assertTrackedFilesSafe() {
+  const tracked = spawnSync(
+    "git",
+    ["ls-files", "--cached", "--others", "--exclude-standard", "-z"],
+    {
+      encoding: "utf8",
+    },
+  );
+  if (tracked.error) {
+    throw tracked.error;
+  }
+  assert.equal(tracked.status, 0, "git ls-files succeeds");
+
+  const files = tracked.stdout.split("\0").filter(Boolean);
+  const forbiddenFileExtensions = /\.(?:key|pem|p12|pfx|keystore)$/i;
+  const privateKeyBlock = new RegExp(
+    ["-----BEGIN ", "(?:RSA |EC |OPENSSH )?", "PRIVATE KEY-----"].join(""),
+  );
+  const tokenPatterns = [
+    /gh[pousr]_[A-Za-z0-9]{20,}/,
+    /github_pat_[A-Za-z0-9_]{20,}/,
+    /AKIA[0-9A-Z]{16}/,
+    /xox[baprs]-[A-Za-z0-9-]{10,}/,
+  ];
+
+  for (const file of files) {
+    const normalized = file.replaceAll("\\", "/");
+    const lower = normalized.toLowerCase();
+    const isEnvFile =
+      (lower === ".env" || lower.startsWith(".env.")) &&
+      lower !== ".env.example";
+    assert.equal(isEnvFile, false, `${file} must not be tracked`);
+    assert.equal(forbiddenFileExtensions.test(lower), false, `${file} looks like signing material`);
+
+    const text = readFileSync(file, "utf8");
+    assert.doesNotMatch(text, privateKeyBlock, `${file} must not contain a private key block`);
+    for (const tokenPattern of tokenPatterns) {
+      assert.doesNotMatch(text, tokenPattern, `${file} must not contain a token-shaped credential`);
+    }
+  }
+}
+
 function runAndAssertNoSecret(command, args, env) {
   const result = spawnSync(command, args, {
     encoding: "utf8",
@@ -97,6 +139,7 @@ const validEnv = {
 
 assertNoProcessEnvLogging();
 assertSecretExamplesBlank();
+assertTrackedFilesSafe();
 
 const cycleDryRun = runAndAssertNoSecret(process.execPath, ["scripts/monitorCycle.mjs", "--dry-run"], {});
 assert.equal(cycleDryRun.status, 0, "monitor cycle dry-run succeeds");

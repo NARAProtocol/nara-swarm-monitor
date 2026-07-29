@@ -2,6 +2,37 @@
 
 This repository is v4-only.
 
+## Cross-Repository Role
+
+This repository is the downstream read-only consumer for protocol and basket
+events. It owns indexing, monitor configuration, deterministic alert rules, and
+monitor documentation. It does not own contract behavior, ABIs, addresses,
+deployment status, or product availability.
+
+Accept an ABI or event change only from a full merged commit in
+`NARAProtocol/nara_protocol_v4` or
+`NARAProtocol/nara_protocol_v4_baskets`. Accept a production address and start
+block only from verified deployment evidence. Schema work may begin from a
+merged implementation, but the monitor must remain unconnected until deployed
+state is verified.
+
+In the FIELD workspace, read
+`../docs/NARA_CROSS_REPOSITORY_RELEASE_PROTOCOL.md` before any
+multi-repository update. Record the origin commit, artifact source, manifest,
+chain, start block, backfill result, and downstream public-documentation impact
+in the pull request.
+
+The explicit cross-repository ABI gate is `npm run check:ecosystem-drift`.
+Before running it, fetch both producer remotes and set
+`NARA_WORKSPACE_ROOT`, `NARA_PROTOCOL_ORIGIN_COMMIT`, and
+`NARA_BASKETS_ORIGIN_COMMIT` from the approved handoff record. Both commit
+values must be full 40-character commits contained in the locally known
+`origin/main`.
+
+The gate reads source directly from those Git commits. It does not read either
+working tree. Do not weaken it to consume whichever sibling files happen to be
+present.
+
 ## GitHub Publishing Standard
 
 All GitHub-facing changes must follow
@@ -9,10 +40,16 @@ All GitHub-facing changes must follow
 inspect the staged diff, scan for secrets, and use a Conventional Commit.
 Documentation and repository status claims must match current code.
 
-The default branch is protected. Never push directly to `main` during routine
-work, even when administrator bypass is available. Create a focused branch,
-open a pull request, require the `verify` check to pass, resolve conversations,
-and squash merge. Administrator bypass is reserved for documented emergencies.
+`npm run verify` includes the machine-enforced repository policy gate. Before
+changing or claiming GitHub security settings, run
+`npm run audit:github-settings`; it reads the live repository configuration and
+must pass without exceptions.
+
+The default branch is protected. Never push directly to `main`. Create a focused
+branch, open a pull request, require the `verify` check to pass, resolve
+conversations, and squash merge. Administrators are subject to the same
+protection. Never disable or bypass protection for an emergency; preserve the
+change locally and wait for the protected workflow to become available.
 
 ## Absolute Boundary
 

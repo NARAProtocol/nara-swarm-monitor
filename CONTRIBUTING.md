@@ -22,6 +22,8 @@ The `main` branch is protected. Do not use administrator access for routine
 direct pushes. Push the focused branch, open a pull request, wait for the
 required `verify` check, resolve conversations, and squash merge. Zero external
 approvals are acceptable while the repository has only one active maintainer.
+Administrators cannot bypass these requirements. GitHub Actions must be pinned
+to immutable full-length commit SHAs.
 
 ## Development and Verification
 
@@ -37,11 +39,15 @@ phrases, environment files, or private RPC URLs.
 If ABI files should change, regenerate them from active v4 Hardhat artifacts:
 
 ```bash
+export NARA_WORKSPACE_ROOT=/absolute/path/to/FIELD-Token
+export NARA_PROTOCOL_ORIGIN_COMMIT=<full-merged-40-character-commit>
 npm run sync:abis
 npm run verify
 ```
 
-Do not hand-edit generated ABI files.
+The protocol checkout must be clean, at that exact commit, and contain the
+generated artifacts from that commit. Do not hand-edit generated ABI files or
+copy them from an uncommitted producer tree.
 
 ## Commit Messages
 
@@ -70,6 +76,12 @@ verification results, and update documentation when behavior changes.
 Breaking configuration changes require migration instructions. Report
 security-sensitive findings through [SECURITY.md](SECURITY.md), not a public
 issue.
+
+When repository settings change, run the read-only live audit:
+
+```bash
+npm run audit:github-settings
+```
 
 Reviewers verify documentation and examples against active v4 code. Retired v3
 or incident-stack addresses are never accepted as live defaults.
