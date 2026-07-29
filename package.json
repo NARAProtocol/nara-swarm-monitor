@@ -19,9 +19,12 @@
     "monitor:cycle": "node scripts/monitorCycle.mjs",
     "monitor:cycle:dry-run": "node scripts/monitorCycle.mjs --dry-run",
     "monitor:health": "node scripts/monitorHealth.mjs",
+    "audit:github-settings": "node scripts/auditGitHubSettings.mjs",
+    "check:repository-policy": "node scripts/checkRepositoryPolicy.mjs",
     "check:docs": "node scripts/checkDocsDrift.mjs",
     "check:secrets": "node scripts/checkNoSecretLeakage.mjs",
     "check:dependencies": "npm audit --audit-level=high",
+    "check:ecosystem-drift": "node scripts/testEcosystemAbiDrift.mjs",
     "verify": "node scripts/verifyRepository.mjs",
     "test": "node scripts/testAll.mjs",
     "lint": "eslint \"src/**/*.ts\" \"config/**/*.ts\" \"*.ts\"",
@@ -55,6 +58,7 @@
     "ws": "8.21.1"
   },
   "engines": {
-    "node": ">=18.14"
-  }
+    "node": ">=22"
+  },
+  "packageManager": "npm@10.9.2"
 }

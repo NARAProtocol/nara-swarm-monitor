@@ -23,7 +23,12 @@ GraphQL endpoints implemented in `src/api/index.ts`.
 ## Generation And Validation
 
 `npm run sync:abis`
-: Copies generated ABIs from active v4 Hardhat artifacts into this monitor.
+: Release-time command that copies generated ABIs from a clean protocol
+checkout at an approved full merged commit. It requires
+`NARA_WORKSPACE_ROOT` and `NARA_PROTOCOL_ORIGIN_COMMIT`, verifies the expected
+GitHub remote and `origin/main` ancestry, and refuses a mismatched or dirty
+checkout. Run the protocol build at that exact commit before this command. It
+is not part of a runtime monitor cycle.
 
 `npm run validate:v4-env`
 : Validates required fresh v4 addresses and `V4_START_BLOCK`.
@@ -48,12 +53,38 @@ stay aligned with `package.json` and `.env.example`.
 : Audits the complete locked dependency tree and fails on high or critical
 security advisories.
 
+`npm run check:ecosystem-drift`
+: Verifies monitor handlers against committed monitor ABIs. For a
+cross-repository release check, set `NARA_WORKSPACE_ROOT`,
+`NARA_PROTOCOL_ORIGIN_COMMIT`, and `NARA_BASKETS_ORIGIN_COMMIT` from the
+approved handoff record first. The two commits must be full merged commits in
+the locally known producer `origin/main` refs. The command reads Solidity
+source directly from those Git commits and does not consume sibling working
+trees.
+
+`npm run check:repository-policy`
+: Verifies required public files, issue and pull-request templates, Dependabot
+coverage, explicit least-privilege workflow permissions, bounded CI jobs,
+full-SHA Action pinning, Node/npm toolchain alignment, ignored secret-bearing
+files, and truthful license status. It runs inside the canonical verification
+gate.
+
+`npm run audit:github-settings`
+: Performs a read-only audit of the live
+`NARAProtocol/nara-swarm-monitor` GitHub settings. It requires an authenticated
+GitHub CLI session and checks default-branch protection, signed commits, the
+required `verify` check, no administrator bypass, linear history, squash-only
+merges, least-privilege workflow tokens, selected and SHA-pinned Actions,
+CodeQL, Dependabot security updates, vulnerability alerts, secret scanning with
+push protection, and private vulnerability reporting. Override the target only
+with `NARA_GITHUB_REPOSITORY=owner/name`.
+
 `npm run verify`
-: Runs the canonical pre-push and CI quality gate: documentation drift, secret
-leakage, dependency security, environment validation, deterministic tests,
-Ponder code generation, ESLint, and TypeScript type checking. When
-`DATABASE_URL` is absent, this command uses a non-secret validation-only local
-URL; it does not connect to that database.
+: Runs the canonical pre-push and CI quality gate: repository policy,
+documentation drift, secret leakage, dependency security, environment
+validation, deterministic tests, Ponder code generation, ESLint, and TypeScript
+type checking. When `DATABASE_URL` is absent, this command uses a non-secret
+validation-only local URL; it does not connect to that database.
 
 `npm run lint`
 : Runs ESLint across the TypeScript source and configuration files.
@@ -76,8 +107,7 @@ delivery rows.
 
 `npm run monitor:cycle`
 : Runs one safe read-only cycle:
-`sync:abis`, `validate:v4-env`, `scan:failed`, `commander`, `summarize`,
-`notify`.
+`validate:v4-env`, `scan:failed`, `commander`, `summarize`, `notify`.
 
 `npm run monitor:cycle:dry-run`
 : Prints the single-cycle plan without executing commands. This is the
@@ -94,6 +124,5 @@ time, and API config without secret values.
 : Runs seeded tests for ops-router monitoring, position intelligence, wallet
 intelligence, deterministic alerts, failed transaction scanner, Commander,
 AI summarizer, notifications, and operator packaging. ABI handlers are always
-checked against committed ABIs. Active Solidity source comparison also runs
-when the complete NARA workspace is available or `NARA_WORKSPACE_ROOT` points
-to it.
+checked against committed ABIs. Active Solidity source comparison runs only
+through the explicitly pinned cross-repository gate described above.

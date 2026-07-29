@@ -62,8 +62,11 @@ invent addresses or deploy unrelated components to satisfy it.
 
 ## ABI Safety
 
-- [ ] `npm run sync:abis` has been run after the latest active v4 Hardhat build.
-- [ ] ABI files are generated from active v4 artifacts.
+- [ ] The producer remotes were fetched and the handoff records full merged commits.
+- [ ] The protocol checkout was clean and exactly at `NARA_PROTOCOL_ORIGIN_COMMIT`.
+- [ ] The protocol build passed at that commit before `npm run sync:abis`.
+- [ ] ABI files record the full origin commit and generated artifact source.
+- [ ] The pinned `npm run check:ecosystem-drift` gate passed.
 - [ ] No archived v3 ABI is imported.
 - [ ] `npm run codegen` passes.
 - [ ] `npm run typecheck` passes.
@@ -88,7 +91,6 @@ invent addresses or deploy unrelated components to satisfy it.
 ## Smoke Commands
 
 ```bash
-npm run sync:abis
 npm run validate:env
 npm run check:docs
 npm run check:secrets

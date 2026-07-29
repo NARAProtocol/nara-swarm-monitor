@@ -16,19 +16,28 @@ the required baseline is:
 - force pushes are disabled;
 - branch deletion is disabled;
 - squash merge is the default merge method;
-- administrator bypass remains available only for a documented emergency;
+- administrators are subject to the same protection with no bypass;
+- signed commits and linear history are required on the default branch;
 - solo-maintainer repositories may require zero external approvals;
 - repositories with active independent maintainers should require at least one
   approval.
 
-An administrator bypass does not authorize convenience pushes. Use it only when
-the protected workflow cannot safely resolve an urgent production incident.
-Document the reason and run the complete verification gate immediately after
-any emergency bypass.
+There is no routine or emergency administrator bypass. Urgent changes still use
+a focused branch, pull request, required checks, and squash merge. If GitHub is
+unavailable, preserve the local change and wait; do not weaken protection.
 
 Branch protection is GitHub state, not repository code. After creating or
 changing a repository, verify the live GitHub settings rather than assuming
 this document enforces them.
+
+For this repository, use:
+
+```bash
+npm run audit:github-settings
+```
+
+The command is read-only and fails if the live settings fall below this
+standard.
 
 ## Required Public Files
 
@@ -40,7 +49,12 @@ Every repository must include:
 - `SECURITY.md` with private reporting guidance and supported scope;
 - a pull-request template and structured issue forms;
 - CI using the locked dependency graph and documented quality gate;
-- automated dependency update configuration.
+- automated dependency update configuration;
+- dependency alerts and automated security fixes;
+- secret scanning with push protection;
+- default CodeQL scanning for supported languages;
+- least-privilege Actions permissions;
+- immutable full-length commit SHAs for every referenced GitHub Action.
 
 Add a `LICENSE` only after the owner deliberately chooses its legal terms. Never
 imply open-source rights that have not been granted.
@@ -83,9 +97,27 @@ Every GitHub change follows this sequence:
 11. Squash merge unless preserving individual commits has documented value.
 12. Delete the merged branch and synchronize the local default branch.
 
-Never push directly to the protected default branch during routine work. Never
-push secrets, private keys, `.env` files, runtime databases, generated runtime
-data, or unreviewed production addresses.
+Never push directly to the protected default branch. Never push secrets,
+private keys, `.env` files, runtime databases, generated runtime data, or
+unreviewed production addresses.
+
+## Machine-Enforced Repository Policy
+
+NARA repositories should make their local baseline executable instead of
+depending on prose alone. This repository runs:
+
+```bash
+npm run check:repository-policy
+```
+
+inside `npm run verify`. The gate checks required public files, locked
+dependency installation, issue and pull-request templates, dependency update
+coverage, least-privilege workflow permissions, bounded CI execution,
+full-length Action SHA pins, ignored secret-bearing files, toolchain alignment,
+and license-status wording.
+
+Live GitHub settings remain a separate evidence surface and are checked with
+`npm run audit:github-settings`.
 
 ## Pull Request Evidence
 
