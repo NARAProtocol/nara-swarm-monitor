@@ -31,10 +31,10 @@
     "typecheck": "tsc"
   },
   "dependencies": {
-    "hono": "^4.12.32",
+    "hono": "^4.13.0",
     "pg": "^8.22.0",
-    "ponder": "^0.16.10",
-    "viem": "^2.55.10"
+    "ponder": "^0.17.4",
+    "viem": "^2.55.11"
   },
   "devDependencies": {
     "@types/node": "^20.9.0",
