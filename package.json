@@ -31,14 +31,14 @@
     "typecheck": "tsc"
   },
   "dependencies": {
-    "hono": "^4.12.32",
-    "pg": "^8.22.0",
-    "ponder": "^0.16.10",
-    "viem": "^2.55.10"
+    "hono": "^4.13.2",
+    "pg": "^8.23.0",
+    "ponder": "^0.17.6",
+    "viem": "^2.55.15"
   },
   "devDependencies": {
     "@types/node": "^20.9.0",
-    "@types/pg": "^8.20.0",
+    "@types/pg": "^8.21.0",
     "eslint": "^8.53.0",
     "eslint-config-ponder": "^0.16.6",
     "typescript": "^5.2.2"
