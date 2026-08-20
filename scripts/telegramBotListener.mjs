@@ -30,6 +30,28 @@ const tokenAbi = [
   { type: "function", name: "totalSupply", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
 ];
 
+async function registerMenuCommands() {
+  const commands = [
+    { command: "status", description: "📊 Live system status & block height" },
+    { command: "health", description: "⏳ Engine epoch sync & backlog check" },
+    { command: "whales", description: "🐋 Top conviction lockers & whale list" },
+    { command: "cliffs", description: "⏱️ Upcoming 24h & 7d unlock cliffs" },
+    { command: "contracts", description: "📜 Verified v4 contract addresses" },
+    { command: "wallet", description: "👛 Lookup wallet balance: /wallet 0x..." },
+    { command: "ping", description: "🏓 Check bot latency & health" },
+    { command: "help", description: "ℹ️ Show help and command overview" },
+  ];
+  try {
+    await fetch(`https://api.telegram.org/bot${botToken}/setMyCommands`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ commands }),
+    });
+  } catch (err) {
+    console.error("Error registering menu commands:", err.message);
+  }
+}
+
 async function sendTg(targetChatId, text) {
   try {
     await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
@@ -72,9 +94,9 @@ async function handleCommand(msg) {
     const helpMsg = [
       "🤖 *NARA Swarm Monitor — Interactive Console*",
       "━━━━━━━━━━━━━━━━━━━━",
-      "Send any of the following commands:",
+      "Tap the *Menu* button next to the chat line or choose from below:",
       "",
-      "• `/status` — Live system status & indexed surfaces",
+      "• `/status` — Live system status & block height",
       "• `/health` — Engine epoch sync & backlog check",
       "• `/whales` — Top lock conviction & whale rankings",
       "• `/cliffs` — Upcoming 24h & 7d unlock cliffs",
@@ -221,12 +243,13 @@ async function handleCommand(msg) {
     }
   }
 
-  return sendTg(fromChatId, "❓ Unknown command. Send `/help` to view available commands.");
+  return sendTg(fromChatId, "❓ Unknown command. Tap *Menu* or send `/help` to view available commands.");
 }
 
 let offset = 0;
 async function pollLoop() {
-  console.log("🤖 Telegram bot command listener started...");
+  await registerMenuCommands();
+  console.log("🤖 Telegram bot command listener started with Menu registered...");
   while (true) {
     try {
       const res = await fetch(`https://api.telegram.org/bot${botToken}/getUpdates?offset=${offset}&timeout=20`);
