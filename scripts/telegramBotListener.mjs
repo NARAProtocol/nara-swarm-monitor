@@ -1,14 +1,23 @@
-﻿import { createPublicClient, http, isAddress, formatUnits } from "viem";
+﻿import { createPublicClient, http, isAddress, getAddress, formatUnits } from "viem";
 import { base } from "viem/chains";
 import pg from "pg";
 
 const botToken = process.env.TELEGRAM_BOT_TOKEN?.trim() || "8984197367:AAEefh3P21j12_-O8eMbFf-WRmU2i0AwxZc";
 const rpcUrl = process.env.BASE_RPC_URL?.trim() || "https://mainnet.base.org";
 const dbUrl = process.env.DATABASE_URL?.trim();
-const engineAddress = process.env.V4_ENGINE?.trim() || "0x53950f6F0827abBEA8b4B1B36aC222C8d8A1E756";
-const tokenAddress = process.env.V4_NARA_TOKEN?.trim() || "0x56a42a98D22b109D90e8a8D54B74a9D2b9a76426";
-const nftAddress = process.env.V4_POSITION_NFT?.trim() || "0x5a18aae7F04E646Abe385E8a36214B85E92376E6";
-const hookAddress = process.env.V4_LIQUIDITY_GROWTH_HOOK?.trim() || "0xC290DFeA7885b54637bC9c6298516091Ff7b4080";
+
+function safeGetAddress(raw, fallback) {
+  try {
+    return getAddress((raw || "").trim());
+  } catch {
+    return fallback ? getAddress(fallback) : undefined;
+  }
+}
+
+const engineAddress = safeGetAddress(process.env.V4_ENGINE, "0x53950f6f0827Abbea8B4b1b36ac222c8d8a1E756");
+const tokenAddress = safeGetAddress(process.env.V4_NARA_TOKEN, "0x56a42A98d22B109D90E8A8d54B74A9d2B9a76426");
+const nftAddress = safeGetAddress(process.env.V4_POSITION_NFT, "0x5A18AaE7F04e646aBe385E8a36214b85e92376E6");
+const hookAddress = safeGetAddress(process.env.V4_LIQUIDITY_GROWTH_HOOK, "0xc290dfEa7885B54637bc9C6298516091FF7b4080");
 
 if (!botToken) {
   console.log("TELEGRAM_BOT_TOKEN not provided. Telegram bot listener will not start.");
@@ -217,22 +226,24 @@ async function handleCommand(msg) {
   }
 
   if (cmd === "/wallet") {
-    if (!arg || !isAddress(arg)) {
+    let target = arg;
+    if (!target || !isAddress(target)) {
       return sendTg(fromChatId, "⚠️ Please provide a valid address: `/wallet 0x...`");
     }
     try {
+      const checksumTarget = getAddress(target);
       const balance = await client.readContract({
         address: tokenAddress,
         abi: tokenAbi,
         functionName: "balanceOf",
-        args: [arg],
+        args: [checksumTarget],
       });
       const formattedBalance = Number(formatUnits(balance, 18)).toLocaleString("en-US", { maximumFractionDigits: 4 });
 
       const walletMsg = [
         "👛 *NARA Wallet Profile*",
         "━━━━━━━━━━━━━━━━━━━━",
-        "• *Address:* `" + arg + "`",
+        "• *Address:* `" + checksumTarget + "`",
         "• *NARA Balance:* " + formattedBalance + " NARA",
         "• *Chain:* Base Mainnet",
         "━━━━━━━━━━━━━━━━━━━━"
@@ -249,7 +260,7 @@ async function handleCommand(msg) {
 let offset = 0;
 async function pollLoop() {
   await registerMenuCommands();
-  console.log("🤖 Telegram bot command listener started with Menu registered...");
+  console.log("🤖 Telegram bot command listener started with checksum addresses...");
   while (true) {
     try {
       const res = await fetch(`https://api.telegram.org/bot${botToken}/getUpdates?offset=${offset}&timeout=20`);
