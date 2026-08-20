@@ -618,34 +618,34 @@ export const position_current_state = onchainView("position_current_state").as((
       when ${nfts.tokenId} is not null and ${nfts.owner} = ${ZERO_ADDRESS} then ${ZERO_ADDRESS}
       when ${locks.user} <> ${ZERO_ADDRESS} then ${locks.user}
       else ${ZERO_ADDRESS}
-    end`,
+    end`.as("owner"),
     ownerSource: sql<string>`case
       when ${nfts.tokenId} is not null and ${nfts.owner} <> ${ZERO_ADDRESS} then 'nft_owner'
       when ${nfts.tokenId} is not null and ${nfts.owner} = ${ZERO_ADDRESS} then 'nft_owner_unknown'
       when ${locks.user} <> ${ZERO_ADDRESS} then 'engine_lock_owner'
       else 'unknown'
-    end`,
+    end`.as("ownerSource"),
     ownerStatus: sql<string>`case
       when ${nfts.tokenId} is not null and ${nfts.owner} = ${ZERO_ADDRESS} then 'unknown_until_transfer'
       when ${nfts.tokenId} is null and ${locks.user} = ${ZERO_ADDRESS} then 'unknown_until_transfer'
       else 'known'
-    end`,
+    end`.as("ownerStatus"),
     engineLockOwner: locks.user,
     status: locks.status,
-    isWrapped: sql<number>`case when ${nfts.tokenId} is null then 0 else 1 end`,
+    isWrapped: sql<number>`case when ${nfts.tokenId} is null then 0 else 1 end`.as("isWrapped"),
     amount: locks.amount,
-    principalAmount: sql<bigint>`coalesce(${nfts.principalAmount}, ${locks.amount})`,
+    principalAmount: sql<bigint>`coalesce(${nfts.principalAmount}, ${locks.amount})`.as("principalAmount"),
     activationEpoch: locks.activationEpoch,
     unlockEpoch: locks.unlockEpoch,
-    estimatedUnlockTimestamp: sql<number>`(${locks.timestamp} + (((${locks.unlockEpoch} - ${locks.activationEpoch})::numeric * ${epochLengthSecondsSql})::integer))`,
+    estimatedUnlockTimestamp: sql<number>`(${locks.timestamp} + (((${locks.unlockEpoch} - ${locks.activationEpoch})::numeric * ${epochLengthSecondsSql})::integer))`.as("estimatedUnlockTimestamp"),
     weight: locks.weight,
-    durationEpochs: sql<bigint>`coalesce(${nfts.durationEpochs}, (${locks.unlockEpoch} - ${locks.activationEpoch}))`,
-    isGenesis: sql<number>`coalesce(${nfts.isGenesis}, 0)`,
-    isEternal: sql<number>`coalesce(${nfts.isEternal}, 0)`,
+    durationEpochs: sql<bigint>`coalesce(${nfts.durationEpochs}, (${locks.unlockEpoch} - ${locks.activationEpoch}))`.as("durationEpochs"),
+    isGenesis: sql<number>`coalesce(${nfts.isGenesis}, 0)`.as("isGenesis"),
+    isEternal: sql<number>`coalesce(${nfts.isEternal}, 0)`.as("isEternal"),
     genesisRoundId: nfts.genesisRoundId,
     genesisTierId: nfts.genesisTierId,
     genesisRewardMultiplierBps: nfts.genesisRewardMultiplierBps,
-    genesisRewardWeight: sql<bigint>`coalesce(${nfts.genesisRewardWeight}, 0)`,
+    genesisRewardWeight: sql<bigint>`coalesce(${nfts.genesisRewardWeight}, 0)`.as("genesisRewardWeight"),
     lastOwnerUpdateBlock: nfts.lastOwnerUpdateBlock,
     lastOwnerUpdateTimestamp: nfts.lastOwnerUpdateTimestamp,
     blockNumber: locks.blockNumber,
@@ -900,19 +900,19 @@ export const wallet_exposure_summary = onchainView("wallet_exposure_summary").as
       when lower(${position_current_state.owner}) = ${configuredTreasuryAddress} then 'treasury'
       when coalesce(sum(${position_current_state.amount}) filter (where ${position_current_state.status} = 'locked'), 0) >= ${whaleLockedAmountSql} then 'whale'
       else 'user'
-    end`,
-    rawPositionCount: sql<number>`count(*) filter (where ${position_current_state.isWrapped} = 0)`,
-    wrappedPositionCount: sql<number>`count(*) filter (where ${position_current_state.isWrapped} = 1)`,
-    genesisPositionCount: sql<number>`count(*) filter (where ${position_current_state.isGenesis} = 1)`,
-    lockedAmount: sql<bigint>`coalesce(sum(${position_current_state.amount}), 0)`,
-    activeLockedAmount: sql<bigint>`coalesce(sum(${position_current_state.amount}) filter (where ${position_current_state.status} = 'locked'), 0)`,
-    unlockedAmount: sql<bigint>`coalesce(sum(${position_current_state.amount}) filter (where ${position_current_state.status} = 'unlocked'), 0)`,
-    unlocking24hAmount: sql<bigint>`coalesce(sum(${position_current_state.amount}) filter (where ${position_current_state.status} = 'locked' and ${position_current_state.estimatedUnlockTimestamp} between ${nowEpochSecondsSql} and (${nowEpochSecondsSql} + 86400)), 0)`,
-    unlocking7dAmount: sql<bigint>`coalesce(sum(${position_current_state.amount}) filter (where ${position_current_state.status} = 'locked' and ${position_current_state.estimatedUnlockTimestamp} between ${nowEpochSecondsSql} and (${nowEpochSecondsSql} + 604800)), 0)`,
-    genesisRewardWeight: sql<bigint>`coalesce(sum(${position_current_state.genesisRewardWeight}), 0)`,
-    avgLockDurationEpochs: sql<bigint>`coalesce(avg(${position_current_state.durationEpochs})::bigint, 0)`,
-    activeWeight: sql<bigint>`coalesce(sum(${position_current_state.weight}) filter (where ${position_current_state.status} = 'locked'), 0)`,
-    lastActivityTimestamp: sql<number>`max(${position_current_state.timestamp})`,
+    end`.as("walletType"),
+    rawPositionCount: sql<number>`count(*) filter (where ${position_current_state.isWrapped} = 0)`.as("rawPositionCount"),
+    wrappedPositionCount: sql<number>`count(*) filter (where ${position_current_state.isWrapped} = 1)`.as("wrappedPositionCount"),
+    genesisPositionCount: sql<number>`count(*) filter (where ${position_current_state.isGenesis} = 1)`.as("genesisPositionCount"),
+    lockedAmount: sql<bigint>`coalesce(sum(${position_current_state.amount}), 0)`.as("lockedAmount"),
+    activeLockedAmount: sql<bigint>`coalesce(sum(${position_current_state.amount}) filter (where ${position_current_state.status} = 'locked'), 0)`.as("activeLockedAmount"),
+    unlockedAmount: sql<bigint>`coalesce(sum(${position_current_state.amount}) filter (where ${position_current_state.status} = 'unlocked'), 0)`.as("unlockedAmount"),
+    unlocking24hAmount: sql<bigint>`coalesce(sum(${position_current_state.amount}) filter (where ${position_current_state.status} = 'locked' and ${position_current_state.estimatedUnlockTimestamp} between ${nowEpochSecondsSql} and (${nowEpochSecondsSql} + 86400)), 0)`.as("unlocking24hAmount"),
+    unlocking7dAmount: sql<bigint>`coalesce(sum(${position_current_state.amount}) filter (where ${position_current_state.status} = 'locked' and ${position_current_state.estimatedUnlockTimestamp} between ${nowEpochSecondsSql} and (${nowEpochSecondsSql} + 604800)), 0)`.as("unlocking7dAmount"),
+    genesisRewardWeight: sql<bigint>`coalesce(sum(${position_current_state.genesisRewardWeight}), 0)`.as("genesisRewardWeight"),
+    avgLockDurationEpochs: sql<bigint>`coalesce(avg(${position_current_state.durationEpochs})::bigint, 0)`.as("avgLockDurationEpochs"),
+    activeWeight: sql<bigint>`coalesce(sum(${position_current_state.weight}) filter (where ${position_current_state.status} = 'locked'), 0)`.as("activeWeight"),
+    lastActivityTimestamp: sql<number>`max(${position_current_state.timestamp})`.as("lastActivityTimestamp"),
   })
     .from(position_current_state)
     .groupBy(position_current_state.owner, position_current_state.chainId, position_current_state.ownerStatus),
@@ -1019,7 +1019,7 @@ export const wallet_current_profile = onchainView("wallet_current_profile").as((
       when ${wallet_position_scores.activeLockedAmount} >= ${whaleLockedAmountSql} then 'whale'
       when ${wallet_position_scores.genesisPositionCount} > 0 then 'genesis_holder'
       else 'user'
-    end`,
+    end`.as("primaryLabel"),
     rawPositionCount: wallet_position_scores.rawPositionCount,
     wrappedPositionCount: wallet_position_scores.wrappedPositionCount,
     genesisPositionCount: wallet_position_scores.genesisPositionCount,
@@ -1042,7 +1042,7 @@ export const wallet_current_profile = onchainView("wallet_current_profile").as((
       ${wallet_position_scores.riskScore} +
       (${wallet_position_scores.unlocking24hAmount} / 1000000000000000000) +
       ((${wallet_position_scores.unlocking7dAmount} / 1000000000000000000) / 2)
-    )::bigint`,
+    )::bigint`.as("riskScore"),
     convictionScore: sql<bigint>`(
       ${wallet_position_scores.convictionScore} +
       case
@@ -1050,7 +1050,7 @@ export const wallet_current_profile = onchainView("wallet_current_profile").as((
         then greatest(0, ((${nowEpochSecondsSql} - ${wallet_position_scores.lastActivityTimestamp}) / 86400))::bigint * 10
         else 0
       end
-    )::bigint`,
+    )::bigint`.as("convictionScore"),
     updatedAt: wallet_position_scores.updatedAt,
   }).from(wallet_position_scores),
 );
