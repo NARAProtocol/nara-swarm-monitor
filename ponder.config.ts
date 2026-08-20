@@ -2,6 +2,10 @@ import { createConfig, factory } from "ponder";
 import { CONTRACTS } from "./config/contracts";
 
 export default createConfig({
+  database: {
+    kind: "postgres",
+    schema: process.env.DATABASE_SCHEMA || "public",
+  },
   chains: {
     base: {
       id: parseInt(process.env.CHAIN_ID || "8453"),
