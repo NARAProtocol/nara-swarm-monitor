@@ -1,8 +1,8 @@
-﻿import { createPublicClient, http, isAddress, getAddress, formatUnits, formatEther } from "viem";
+import { createPublicClient, http, isAddress, getAddress, formatUnits, formatEther } from "viem";
 import { base } from "viem/chains";
 import pg from "pg";
 
-const botToken = process.env.TELEGRAM_BOT_TOKEN?.trim() || "8984197367:AAEefh3P21j12_-O8eMbFf-WRmU2i0AwxZc";
+const botToken = process.env.TELEGRAM_BOT_TOKEN?.trim();
 const rpcUrl = process.env.BASE_RPC_URL?.trim() || "https://mainnet.base.org";
 const dbUrl = process.env.DATABASE_URL?.trim();
 
