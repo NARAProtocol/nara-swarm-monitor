@@ -30,36 +30,46 @@ Click on your `nara-swarm-monitor` service box, go to the **"Variables"** tab, a
 ```env
 CHAIN_ID=8453
 MONITOR_PROFILE=core
-BASE_RPC_URL=https://mainnet.base.org
+BASE_RPC_URL=https://base-mainnet.g.alchemy.com/v2/YOUR_KEY
 V4_START_BLOCK=49719008
 V4_EPOCH_LENGTH_SECONDS=900
 V4_MAX_EPOCH_BACKLOG=8
 V4_NARA_TOKEN=0xB6333F5D4cEd8dffA80F3F13697D6aA3BB3f19c1
 V4_ENGINE=0x98ab6406D6B548F37dEF7110961bb45A399e5aFC
+V4_POSITION_NFT=0x5a18aae7F04E646Abe385E8a36214B85E92376E6
 V4_LIQUIDITY_GROWTH_HOOK=0x59AEf9799DEA01A7FB7dA73BEA10dfB08858A088
 V4_LIQUIDITY_GROWTH_VAULT=0xD7f7b44BF65EBa3E90fDe0642687ed22A323084D
 V4_LIQUIDITY_COMPOUNDER=0xfeFcc45C0454D022586eaA8a5c51BD25DCe713DF
 V4_UNISWAP_V4_POOL_ID=0x83edced1f39e6adf7469cd718eeb409824d948959263408d4cfb6e745c8db464
-V4_TREASURY_ADDRESS=0xd65c0e390Dc187A22c52c03816591CC736C0D755
+V4_TREASURY_ADDRESS=0xfe3A8678A9c729438BB11718bD1391E7Ab491E8e
 V4_FINAL_ADMIN=0xd65c0e390Dc187A22c52c03816591CC736C0D755
-DEPLOYER_ADDRESS=0x1994eeb95013063C79A46e962886a19fFf78F096
-NOTIFICATION_CHANNELS=console
+DEPLOYER_ADDRESS=0xAE9D1667B45558232BeD9d45DcCA53940F892aB5
+
+# Notifications & Telegram Bot Console
+NOTIFY_CHANNELS=telegram,console
+TELEGRAM_BOT_TOKEN=YOUR_BOT_TOKEN
+TELEGRAM_CHAT_ID=YOUR_CHAT_ID
+NOTIFY_YELLOW=true
+MONITOR_CYCLE_INTERVAL_SECONDS=600
 ```
 
-*(Note: If you have an Alchemy or QuickNode Base RPC URL, replace `BASE_RPC_URL` with your private key endpoint).*
+*(Note: Replace `BASE_RPC_URL`, `TELEGRAM_BOT_TOKEN`, and `TELEGRAM_CHAT_ID` with your own credentials).*
 
-#### Step 4: Generate Public Domain (Optional — For API Access)
-1. Go to the **"Settings"** tab of the `nara-swarm-monitor` service.
+#### Step 4: Link Telegram Bot
+1. Open Telegram and search for your bot username (or click your bot's link).
+2. Tap **Start** (or send `/start`).
+3. The bot will automatically register the native **Menu** button (`/wallet`, `/health`, `/whales`, `/cliffs`, `/status`, `/contracts`, `/ping`) and link your chat for 24/7 security alerts!
+
+#### Step 5: Generate Public Domain (Optional — For GraphQL Explorer & API Access)
+1. Go to the **"Settings"** tab of the `nara-swarm-monitor` service on Railway.
 2. Under **"Networking"**, click **"Generate Domain"**.
-3. You now have a live HTTPS endpoint (e.g. `https://nara-swarm-monitor-production.up.railway.app`) serving live GraphQL and REST queries!
+3. You now have a live HTTPS endpoint (e.g. `https://nara-swarm-monitor-production.up.railway.app`) serving live GraphQL (`/graphql`) and REST queries!
 
 ---
 
 ### 🔍 How to Verify It's Running
 1. Click the **"Deployments"** tab on Railway and open **"View Logs"**.
-2. You will see Ponder syncing blocks on Base from block `49719008`:
-   ```text
-   [Ponder] Syncing historical events from block 49719008...
-   [Ponder] Indexed NARAToken, NARAEngine, NARALiquidityGrowthHook
-   [Ponder] Real-time indexing active on Base mainnet (chainId: 8453)
-   ```
+2. You will see:
+   * **Ponder Indexer:** Syncing events and live blocks on Base from block `49719008`.
+   * **Telegram Console:** `🤖 Telegram bot command listener started with Menu registered...`
+   * **Autonomous Swarm Scheduler:** Running the 6-step diagnostic cycle every 10 minutes (`600s`).
