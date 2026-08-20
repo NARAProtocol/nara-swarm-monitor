@@ -363,14 +363,14 @@ async function handleCommand(msg) {
             let claimEth = 0n;
             if (isActive) {
               try {
-                const rewards = await client.readContract({
+                const [posNara, posEth] = await client.readContract({
                   address: engineAddress,
                   abi: engineAbi,
                   functionName: "claimableRewards",
                   args: [BigInt(i)],
                 });
-                claimNara = BigInt(rewards.naraReward || rewards[0] || 0);
-                claimEth = BigInt(rewards.ethReward || rewards[1] || 0);
+                claimNara = BigInt(posNara ?? 0);
+                claimEth = BigInt(posEth ?? 0);
                 totalClaimableNara += claimNara;
                 totalClaimableEth += claimEth;
               } catch {}
@@ -400,8 +400,8 @@ async function handleCommand(msg) {
 
       const lockedNara = Number(formatUnits(totalLockedBig, 18));
       const weightFormatted = Number(formatUnits(totalWeightBig, 18)).toLocaleString("en-US", { maximumFractionDigits: 2 });
-      const claimableNaraFormatted = Number(formatUnits(totalClaimableNara, 18)).toFixed(4);
-      const claimableEthFormatted = Number(formatEther(totalClaimableEth)).toFixed(6);
+      const claimableNaraFormatted = (Number(formatUnits(totalClaimableNara, 18))).toFixed(4);
+      const claimableEthFormatted = (Number(formatEther(totalClaimableEth))).toFixed(6);
 
       // Archetype classification
       let archetype = "🌱 EARLY ACCUMULATOR";
@@ -431,7 +431,8 @@ async function handleCommand(msg) {
         lockDetailsText = activeLocks.map((l) => {
           const lAmt = Number(formatUnits(l.amount, 18)).toLocaleString("en-US", { maximumFractionDigits: 2 });
           const lWgt = Number(formatUnits(l.weight, 18)).toLocaleString("en-US", { maximumFractionDigits: 0 });
-          return `• 🔒 *Lock #${l.id}:* ${lAmt} NARA (Weight: ${lWgt}x)\n  ├ *Epochs:* #${l.activationEpoch} → Unlocks @ #${l.unlockEpoch}\n  └ *Claimable:* +${Number(formatUnits(l.claimNara, 18)).toFixed(4)} NARA`;
+          const lClaim = Number(formatUnits(l.claimNara, 18)).toFixed(4);
+          return `• 🔒 *Lock #${l.id}:* ${lAmt} NARA (Weight: ${lWgt}x)\n  ├ *Epochs:* #${l.activationEpoch} → Unlocks @ #${l.unlockEpoch}\n  └ *Accruing Rewards:* +${lClaim} NARA`;
         }).join("\n");
       }
 
@@ -449,8 +450,8 @@ async function handleCommand(msg) {
         "• 🔷 *Liquid ETH:* " + ethFormatted + " ETH",
         "• 🖼️ *Position NFTs:* " + nftBal.toString() + " Held",
         "",
-        "🌾 *LIVE REWARDS & YIELD*",
-        "• 🎁 *Claimable NARA:* +" + claimableNaraFormatted + " NARA (Accruing)",
+        "🌾 *LIVE ACCRUING REWARDS*",
+        "• 🎁 *Claimable NARA:* +" + claimableNaraFormatted + " NARA",
         "• 💵 *Claimable ETH:* +" + claimableEthFormatted + " ETH",
         "• ⏳ *Current Epoch:* #" + currentEpoch,
         "",
