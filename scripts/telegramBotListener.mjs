@@ -34,6 +34,38 @@ const client = createPublicClient({
 const engineAbi = [
   { type: "function", name: "currentEpoch", stateMutability: "view", inputs: [], outputs: [{ type: "uint64" }] },
   { type: "function", name: "epochState", stateMutability: "view", inputs: [], outputs: [{ name: "epoch", type: "uint64" }] },
+  { type: "function", name: "nextPositionId", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  {
+    type: "function",
+    name: "positionOf",
+    stateMutability: "view",
+    inputs: [{ name: "positionId", type: "uint256" }],
+    outputs: [{
+      type: "tuple",
+      components: [
+        { name: "owner", type: "address" },
+        { name: "createdEpoch", type: "uint64" },
+        { name: "flags", type: "uint32" },
+        { name: "amount", type: "uint128" },
+        { name: "weight", type: "uint128" },
+        { name: "activationEpoch", type: "uint64" },
+        { name: "unlockEpoch", type: "uint64" },
+        { name: "tokenWeight", type: "uint128" },
+        { name: "naraDebtRay", type: "uint256" },
+        { name: "ethDebtRay", type: "uint256" },
+      ]
+    }]
+  },
+  {
+    type: "function",
+    name: "claimableRewards",
+    stateMutability: "view",
+    inputs: [{ name: "positionId", type: "uint256" }],
+    outputs: [
+      { name: "naraReward", type: "uint256" },
+      { name: "ethReward", type: "uint256" }
+    ]
+  },
 ];
 
 const tokenAbi = [
@@ -198,18 +230,50 @@ async function handleCommand(msg) {
   }
 
   if (cmd === "/whales") {
-    const rows = await queryDb('select wallet, "lockedAmount", "genesisRewardWeight" from wallet_conviction_ranking limit 5');
-    if (rows && rows.length > 0) {
-      const list = rows.map((r, i) => `${i + 1}. \`${r.wallet.slice(0, 8)}...${r.wallet.slice(-6)}\` — ${Number(formatUnits(BigInt(r.lockedAmount || 0), 18)).toLocaleString()} NARA`).join("\n");
-      const msgText = [
-        "🐋 *Top NARA Whales & Conviction Lockers*",
-        "━━━━━━━━━━━━━━━━━━━━",
-        list,
-        "━━━━━━━━━━━━━━━━━━━━"
-      ].join("\n");
-      return sendTg(fromChatId, msgText);
-    } else {
-      return sendTg(fromChatId, "🐋 *Whale Tracking:* No whale positions locked on-chain yet.\n\nSend `/wallet 0x...` to inspect any wallet!");
+    try {
+      const nextPosId = await client.readContract({
+        address: engineAddress,
+        abi: engineAbi,
+        functionName: "nextPositionId",
+      });
+      const count = Number(nextPosId);
+      const userTotals = new Map();
+
+      for (let i = 1; i < count; i++) {
+        try {
+          const pos = await client.readContract({
+            address: engineAddress,
+            abi: engineAbi,
+            functionName: "positionOf",
+            args: [BigInt(i)],
+          });
+          const amt = BigInt(pos.amount);
+          if (amt > 0n) {
+            const current = userTotals.get(pos.owner.toLowerCase()) || { owner: pos.owner, amount: 0n, count: 0 };
+            current.amount += amt;
+            current.count += 1;
+            userTotals.set(pos.owner.toLowerCase(), current);
+          }
+        } catch {}
+      }
+
+      const sorted = Array.from(userTotals.values()).sort((a, b) => (b.amount > a.amount ? 1 : -1)).slice(0, 5);
+
+      if (sorted.length > 0) {
+        const list = sorted.map((r, i) => `${i + 1}. \`${r.owner.slice(0, 8)}...${r.owner.slice(-6)}\` — *${Number(formatUnits(r.amount, 18)).toLocaleString()} NARA* (${r.count} lock${r.count > 1 ? 's' : ''})`).join("\n");
+        const msgText = [
+          "🐋 *Top NARA Whales & Conviction Lockers*",
+          "━━━━━━━━━━━━━━━━━━━━",
+          list,
+          "━━━━━━━━━━━━━━━━━━━━",
+          "💬 *Send `/wallet 0x...` to view any locker's full dossier!*"
+        ].join("\n");
+        return sendTg(fromChatId, msgText);
+      } else {
+        return sendTg(fromChatId, "🐋 *Whale Tracking:* No active locked positions found yet.");
+      }
+    } catch (e) {
+      return sendTg(fromChatId, "❌ Error loading whales: " + e.message);
     }
   }
 
@@ -239,7 +303,7 @@ async function handleCommand(msg) {
       const checksumTarget = getAddress(target);
       const lower = checksumTarget.toLowerCase();
 
-      const [ethBal, naraBal, nftBal, totalSupply, currentEpoch] = await Promise.all([
+      const [ethBal, naraBal, nftBal, totalSupply, currentEpoch, nextPosId] = await Promise.all([
         client.getBalance({ address: checksumTarget }),
         client.readContract({
           address: tokenAddress,
@@ -263,26 +327,78 @@ async function handleCommand(msg) {
           abi: engineAbi,
           functionName: "currentEpoch",
         }).catch(() => 0n),
+        client.readContract({
+          address: engineAddress,
+          abi: engineAbi,
+          functionName: "nextPositionId",
+        }).catch(() => 0n),
       ]);
 
-      // Query database for locks and claims
-      const lockRows = await queryDb('select sum(amount) as locked, sum(weight) as weight, count(*) as count from locks where lower("user") = $1 and status = \'locked\'', [lower]);
-      const claimRows = await queryDb('select sum("ethAmount") as eth, sum("naraAmount") as nara, count(*) as count from position_claim_events where lower("user") = $1 or lower("to") = $1', [lower]);
+      // Scan all on-chain positions for this user
+      const totalPositions = Number(nextPosId);
+      const userLocks = [];
+      let totalLockedBig = 0n;
+      let totalWeightBig = 0n;
+      let totalClaimableNara = 0n;
+      let totalClaimableEth = 0n;
+
+      for (let i = 1; i < totalPositions; i++) {
+        try {
+          const pos = await client.readContract({
+            address: engineAddress,
+            abi: engineAbi,
+            functionName: "positionOf",
+            args: [BigInt(i)],
+          });
+          if (pos.owner.toLowerCase() === lower) {
+            const amt = BigInt(pos.amount);
+            const wgt = BigInt(pos.weight);
+            totalLockedBig += amt;
+            totalWeightBig += wgt;
+
+            let claimNara = 0n;
+            let claimEth = 0n;
+            if (amt > 0n) {
+              try {
+                const rewards = await client.readContract({
+                  address: engineAddress,
+                  abi: engineAbi,
+                  functionName: "claimableRewards",
+                  args: [BigInt(i)],
+                });
+                claimNara = rewards[0];
+                claimEth = rewards[1];
+                totalClaimableNara += claimNara;
+                totalClaimableEth += claimEth;
+              } catch {}
+            }
+
+            userLocks.push({
+              id: i,
+              amount: amt,
+              weight: wgt,
+              activationEpoch: pos.activationEpoch,
+              unlockEpoch: pos.unlockEpoch,
+              claimNara,
+              claimEth,
+              isActive: amt > 0n,
+            });
+          }
+        } catch {}
+      }
+
+      const activeLocks = userLocks.filter((l) => l.isActive);
+      const maturedLocks = userLocks.filter((l) => !l.isActive);
 
       const liquidNara = Number(formatUnits(naraBal, 18));
       const totalSup = Number(formatUnits(totalSupply, 18));
       const sharePct = totalSup > 0 ? ((liquidNara / totalSup) * 100).toFixed(2) : "0.00";
       const ethFormatted = Number(formatEther(ethBal)).toFixed(4);
 
-      const lockedNaraBig = lockRows && lockRows[0]?.locked ? BigInt(lockRows[0].locked) : 0n;
-      const lockedNara = Number(formatUnits(lockedNaraBig, 18));
-      const lockCount = lockRows && lockRows[0]?.count ? Number(lockRows[0].count) : 0;
-      const weightNum = lockRows && lockRows[0]?.weight ? (Number(lockRows[0].weight) / 1e18).toFixed(2) : "0.00";
-
-      const claimedEthBig = claimRows && claimRows[0]?.eth ? BigInt(claimRows[0].eth) : 0n;
-      const claimedEth = Number(formatEther(claimedEthBig)).toFixed(4);
-      const claimedNaraBig = claimRows && claimRows[0]?.nara ? BigInt(claimRows[0].nara) : 0n;
-      const claimedNara = Number(formatUnits(claimedNaraBig, 18)).toLocaleString("en-US", { maximumFractionDigits: 2 });
+      const lockedNara = Number(formatUnits(totalLockedBig, 18));
+      const weightFormatted = Number(formatUnits(totalWeightBig, 18)).toLocaleString("en-US", { maximumFractionDigits: 2 });
+      const claimableNaraFormatted = Number(formatUnits(totalClaimableNara, 18)).toFixed(4);
+      const claimableEthFormatted = Number(formatEther(totalClaimableEth)).toFixed(6);
 
       // Archetype classification
       let archetype = "🌱 EARLY ACCUMULATOR";
@@ -307,8 +423,18 @@ async function handleCommand(msg) {
 
       const shortAddr = checksumTarget.slice(0, 6) + "..." + checksumTarget.slice(-4);
 
+      // Lock details preview
+      let lockDetailsText = "";
+      if (activeLocks.length > 0) {
+        lockDetailsText = activeLocks.map((l) => {
+          const lAmt = Number(formatUnits(l.amount, 18)).toLocaleString("en-US", { maximumFractionDigits: 2 });
+          const lWgt = Number(formatUnits(l.weight, 18)).toLocaleString("en-US", { maximumFractionDigits: 0 });
+          return `• 🔒 *Lock #${l.id}:* ${lAmt} NARA (Weight: ${lWgt}x)\n  ├ *Epochs:* #${l.activationEpoch} → Unlocks @ #${l.unlockEpoch}\n  └ *Claimable:* +${Number(formatUnits(l.claimNara, 18)).toFixed(4)} NARA`;
+        }).join("\n");
+      }
+
       const dossierMsg = [
-        "💎 *NARA DOSSIER: " + shortAddr + "*",
+        "💎 *NARA ALPHA DOSSIER: " + shortAddr + "*",
         "━━━━━━━━━━━━━━━━━━━━",
         "🏷️ *Archetype:* " + archetype,
         "🏆 *Rank Tier:* " + rankTier,
@@ -316,19 +442,24 @@ async function handleCommand(msg) {
         "",
         "💰 *CAPITAL & HOLDINGS*",
         "• 🪙 *Liquid NARA:* " + liquidNara.toLocaleString("en-US", { maximumFractionDigits: 2 }) + " NARA (*" + sharePct + "%* of Supply)",
-        "• 🔒 *Locked NARA:* " + lockedNara.toLocaleString("en-US", { maximumFractionDigits: 2 }) + " NARA (" + lockCount + " Active Locks)",
-        "• ⚡ *Active Weight:* " + weightNum + "x Boost",
+        "• 🔒 *Locked NARA:* " + lockedNara.toLocaleString("en-US", { maximumFractionDigits: 2 }) + " NARA (*" + activeLocks.length + " Active*, " + maturedLocks.length + " Matured)",
+        "• ⚡ *Active Weight:* " + weightFormatted + "x Boost",
         "• 🔷 *Liquid ETH:* " + ethFormatted + " ETH",
         "• 🖼️ *Position NFTs:* " + nftBal.toString() + " Held",
         "",
-        "🌾 *REWARDS & PROTOCOL EARNINGS*",
-        "• 💵 *Claimed ETH:* " + claimedEth + " ETH",
-        "• 🪙 *Claimed NARA:* " + claimedNara + " NARA",
+        "🌾 *LIVE REWARDS & YIELD*",
+        "• 🎁 *Claimable NARA:* +" + claimableNaraFormatted + " NARA (Accruing)",
+        "• 💵 *Claimable ETH:* +" + claimableEthFormatted + " ETH",
         "• ⏳ *Current Epoch:* #" + currentEpoch,
         "",
+        ...(activeLocks.length > 0 ? [
+          "📜 *ACTIVE LOCK DETAILS*",
+          lockDetailsText,
+          ""
+        ] : []),
         "⏳ *MATURITY & EXITS*",
         "• 🟢 *24h / 7d Pressure:* 0 Cliff Exits",
-        "• 📈 *Exposure Profile:* Ultra-High Conviction",
+        "• 📈 *Exposure Profile:* Ultra-High Conviction Long-Term Locker",
         "━━━━━━━━━━━━━━━━━━━━",
         "🔗 [BaseScan Explorer](https://basescan.org/address/" + checksumTarget + ")",
         "💬 *Send \`/whales\` to view top protocol rankers!*"
@@ -346,7 +477,7 @@ async function handleCommand(msg) {
 let offset = 0;
 async function pollLoop() {
   await registerMenuCommands();
-  console.log("🤖 Telegram bot command listener started with rich Dossier...");
+  console.log("🤖 Telegram bot command listener started with on-chain lock scanning...");
   while (true) {
     try {
       const res = await fetch(`https://api.telegram.org/bot${botToken}/getUpdates?offset=${offset}&timeout=20`);
