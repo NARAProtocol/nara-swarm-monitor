@@ -334,7 +334,6 @@ async function handleCommand(msg) {
         }).catch(() => 0n),
       ]);
 
-      // Scan all on-chain positions for this user
       const totalPositions = Number(nextPosId);
       const userLocks = [];
       let totalLockedBig = 0n;
@@ -353,12 +352,16 @@ async function handleCommand(msg) {
           if (pos.owner.toLowerCase() === lower) {
             const amt = BigInt(pos.amount);
             const wgt = BigInt(pos.weight);
-            totalLockedBig += amt;
-            totalWeightBig += wgt;
+            const isActive = amt > 0n;
+
+            if (isActive) {
+              totalLockedBig += amt;
+              totalWeightBig += wgt;
+            }
 
             let claimNara = 0n;
             let claimEth = 0n;
-            if (amt > 0n) {
+            if (isActive) {
               try {
                 const rewards = await client.readContract({
                   address: engineAddress,
@@ -366,8 +369,8 @@ async function handleCommand(msg) {
                   functionName: "claimableRewards",
                   args: [BigInt(i)],
                 });
-                claimNara = rewards[0];
-                claimEth = rewards[1];
+                claimNara = BigInt(rewards.naraReward || rewards[0] || 0);
+                claimEth = BigInt(rewards.ethReward || rewards[1] || 0);
                 totalClaimableNara += claimNara;
                 totalClaimableEth += claimEth;
               } catch {}
@@ -381,7 +384,7 @@ async function handleCommand(msg) {
               unlockEpoch: pos.unlockEpoch,
               claimNara,
               claimEth,
-              isActive: amt > 0n,
+              isActive,
             });
           }
         } catch {}
@@ -423,7 +426,6 @@ async function handleCommand(msg) {
 
       const shortAddr = checksumTarget.slice(0, 6) + "..." + checksumTarget.slice(-4);
 
-      // Lock details preview
       let lockDetailsText = "";
       if (activeLocks.length > 0) {
         lockDetailsText = activeLocks.map((l) => {
@@ -477,7 +479,7 @@ async function handleCommand(msg) {
 let offset = 0;
 async function pollLoop() {
   await registerMenuCommands();
-  console.log("🤖 Telegram bot command listener started with on-chain lock scanning...");
+  console.log("🤖 Telegram bot command listener started...");
   while (true) {
     try {
       const res = await fetch(`https://api.telegram.org/bot${botToken}/getUpdates?offset=${offset}&timeout=20`);
