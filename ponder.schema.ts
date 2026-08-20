@@ -257,6 +257,7 @@ export const wallet_labels = onchainTable("wallet_labels", (t) => ({
 }));
 
 export const wallet_position_scores = onchainTable("wallet_position_scores", (t) => ({
+  id: t.text().primaryKey(), // chainId + wallet
   wallet: t.text().notNull(),
   chainId: t.integer().notNull(),
   rawPositionCount: t.integer().notNull(),
@@ -280,8 +281,6 @@ export const wallet_position_scores = onchainTable("wallet_position_scores", (t)
   riskScore: t.bigint().notNull(),
   convictionScore: t.bigint().notNull(),
   updatedAt: t.integer().notNull(),
-}), (table) => ({
-  pk: primaryKey({ columns: [table.wallet, table.chainId] }),
 }));
 
 export const wallet_activity_events = onchainTable("wallet_activity_events", (t) => ({
