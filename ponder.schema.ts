@@ -704,112 +704,186 @@ export const wallet_locked_exposure = onchainView("wallet_locked_exposure").as((
 
 export const owner_locked_positions = onchainView("owner_locked_positions").as((qb) =>
   qb.select({
-    id: position_current_state.id,
-    chainId: position_current_state.chainId,
-    owner: position_current_state.owner,
-    ownerSource: position_current_state.ownerSource,
-    ownerStatus: position_current_state.ownerStatus,
-    tokenId: position_current_state.tokenId,
-    positionId: position_current_state.positionId,
-    amount: position_current_state.amount,
-    weight: position_current_state.weight,
-    unlockEpoch: position_current_state.unlockEpoch,
-    estimatedUnlockTimestamp: position_current_state.estimatedUnlockTimestamp,
-    isWrapped: position_current_state.isWrapped,
-    isGenesis: position_current_state.isGenesis,
-    isEternal: position_current_state.isEternal,
+    id: locks.id,
+    chainId: locks.chainId,
+    owner: sql<string>`case
+      when ${nfts.tokenId} is not null and ${nfts.owner} <> ${ZERO_ADDRESS} then ${nfts.owner}
+      when ${nfts.tokenId} is not null and ${nfts.owner} = ${ZERO_ADDRESS} then ${ZERO_ADDRESS}
+      when ${locks.user} <> ${ZERO_ADDRESS} then ${locks.user}
+      else ${ZERO_ADDRESS}
+    end`.as("owner"),
+    ownerSource: sql<string>`case
+      when ${nfts.tokenId} is not null and ${nfts.owner} <> ${ZERO_ADDRESS} then 'nft_owner'
+      when ${nfts.tokenId} is not null and ${nfts.owner} = ${ZERO_ADDRESS} then 'nft_owner_unknown'
+      when ${locks.user} <> ${ZERO_ADDRESS} then 'engine_lock_owner'
+      else 'unknown'
+    end`.as("ownerSource"),
+    ownerStatus: sql<string>`case
+      when ${nfts.tokenId} is not null and ${nfts.owner} = ${ZERO_ADDRESS} then 'unknown_until_transfer'
+      when ${nfts.tokenId} is null and ${locks.user} = ${ZERO_ADDRESS} then 'unknown_until_transfer'
+      else 'known'
+    end`.as("ownerStatus"),
+    tokenId: nfts.tokenId,
+    positionId: locks.lockId,
+    amount: locks.amount,
+    weight: locks.weight,
+    unlockEpoch: locks.unlockEpoch,
+    estimatedUnlockTimestamp: sql<number>`(${locks.timestamp} + (((${locks.unlockEpoch} - ${locks.activationEpoch})::numeric * ${epochLengthSecondsSql})::integer))`.as("estimatedUnlockTimestamp"),
+    isWrapped: sql<number>`case when ${nfts.tokenId} is null then 0 else 1 end`.as("isWrapped"),
+    isGenesis: sql<number>`coalesce(${nfts.isGenesis}, 0)`.as("isGenesis"),
+    isEternal: sql<number>`coalesce(${nfts.isEternal}, 0)`.as("isEternal"),
   })
-    .from(position_current_state)
-    .where(eq(position_current_state.status, "locked")),
+    .from(locks)
+    .leftJoin(nfts, and(eq(locks.chainId, nfts.chainId), eq(locks.lockId, nfts.positionId)))
+    .where(eq(locks.status, "locked")),
 );
 
 export const treasury_locked_positions = onchainView("treasury_locked_positions").as((qb) =>
   qb.select({
-    id: position_current_state.id,
-    chainId: position_current_state.chainId,
-    owner: position_current_state.owner,
-    ownerSource: position_current_state.ownerSource,
-    tokenId: position_current_state.tokenId,
-    positionId: position_current_state.positionId,
-    amount: position_current_state.amount,
-    weight: position_current_state.weight,
-    unlockEpoch: position_current_state.unlockEpoch,
-    estimatedUnlockTimestamp: position_current_state.estimatedUnlockTimestamp,
-    isWrapped: position_current_state.isWrapped,
-    isGenesis: position_current_state.isGenesis,
+    id: locks.id,
+    chainId: locks.chainId,
+    owner: sql<string>`case
+      when ${nfts.tokenId} is not null and ${nfts.owner} <> ${ZERO_ADDRESS} then ${nfts.owner}
+      when ${nfts.tokenId} is not null and ${nfts.owner} = ${ZERO_ADDRESS} then ${ZERO_ADDRESS}
+      when ${locks.user} <> ${ZERO_ADDRESS} then ${locks.user}
+      else ${ZERO_ADDRESS}
+    end`.as("owner"),
+    ownerSource: sql<string>`case
+      when ${nfts.tokenId} is not null and ${nfts.owner} <> ${ZERO_ADDRESS} then 'nft_owner'
+      when ${nfts.tokenId} is not null and ${nfts.owner} = ${ZERO_ADDRESS} then 'nft_owner_unknown'
+      when ${locks.user} <> ${ZERO_ADDRESS} then 'engine_lock_owner'
+      else 'unknown'
+    end`.as("ownerSource"),
+    tokenId: nfts.tokenId,
+    positionId: locks.lockId,
+    amount: locks.amount,
+    weight: locks.weight,
+    unlockEpoch: locks.unlockEpoch,
+    estimatedUnlockTimestamp: sql<number>`(${locks.timestamp} + (((${locks.unlockEpoch} - ${locks.activationEpoch})::numeric * ${epochLengthSecondsSql})::integer))`.as("estimatedUnlockTimestamp"),
+    isWrapped: sql<number>`case when ${nfts.tokenId} is null then 0 else 1 end`.as("isWrapped"),
+    isGenesis: sql<number>`coalesce(${nfts.isGenesis}, 0)`.as("isGenesis"),
   })
-    .from(position_current_state)
+    .from(locks)
+    .leftJoin(nfts, and(eq(locks.chainId, nfts.chainId), eq(locks.lockId, nfts.positionId)))
     .where(and(
-      eq(position_current_state.status, "locked"),
-      eq(position_current_state.owner, configuredTreasuryAddress),
-      ne(position_current_state.ownerStatus, "unknown_until_transfer"),
+      eq(locks.status, "locked"),
+      sql`case
+        when ${nfts.tokenId} is not null and ${nfts.owner} <> ${ZERO_ADDRESS} then lower(${nfts.owner}) = ${configuredTreasuryAddress}
+        when ${locks.user} <> ${ZERO_ADDRESS} then lower(${locks.user}) = ${configuredTreasuryAddress}
+        else false
+      end`,
     )),
 );
 
 export const genesis_position_summary = onchainView("genesis_position_summary").as((qb) =>
   qb.select({
-    owner: position_current_state.owner,
-    ownerStatus: position_current_state.ownerStatus,
-    genesisRoundId: position_current_state.genesisRoundId,
-    genesisTierId: position_current_state.genesisTierId,
+    owner: sql<string>`case
+      when ${nfts.tokenId} is not null and ${nfts.owner} <> ${ZERO_ADDRESS} then ${nfts.owner}
+      when ${locks.user} <> ${ZERO_ADDRESS} then ${locks.user}
+      else ${ZERO_ADDRESS}
+    end`.as("owner"),
+    ownerStatus: sql<string>`case
+      when ${nfts.tokenId} is not null and ${nfts.owner} = ${ZERO_ADDRESS} then 'unknown_until_transfer'
+      when ${nfts.tokenId} is null and ${locks.user} = ${ZERO_ADDRESS} then 'unknown_until_transfer'
+      else 'known'
+    end`.as("ownerStatus"),
+    genesisRoundId: nfts.genesisRoundId,
+    genesisTierId: nfts.genesisTierId,
     positionCount: sql<number>`count(*)`.as("positionCount"),
-    eternalCount: sql<number>`count(*) filter (where ${position_current_state.isEternal} = 1)`.as("eternalCount"),
-    lockedNara: sql<bigint>`coalesce(sum(${position_current_state.amount}) filter (where ${position_current_state.status} = 'locked'), 0)`.as("lockedNara"),
-    genesisRewardWeight: sql<bigint>`coalesce(sum(${position_current_state.genesisRewardWeight}) filter (where ${position_current_state.status} = 'locked'), 0)`.as("genesisRewardWeight"),
+    eternalCount: sql<number>`count(*) filter (where ${nfts.isEternal} = 1)`.as("eternalCount"),
+    lockedNara: sql<bigint>`coalesce(sum(${locks.amount}) filter (where ${locks.status} = 'locked'), 0)`.as("lockedNara"),
+    genesisRewardWeight: sql<bigint>`coalesce(sum(${nfts.genesisRewardWeight}) filter (where ${locks.status} = 'locked'), 0)`.as("genesisRewardWeight"),
   })
-    .from(position_current_state)
-    .where(eq(position_current_state.isGenesis, 1))
+    .from(locks)
+    .leftJoin(nfts, and(eq(locks.chainId, nfts.chainId), eq(locks.lockId, nfts.positionId)))
+    .where(eq(nfts.isGenesis, 1))
     .groupBy(
-      position_current_state.owner,
-      position_current_state.ownerStatus,
-      position_current_state.genesisRoundId,
-      position_current_state.genesisTierId,
+      sql`case
+        when ${nfts.tokenId} is not null and ${nfts.owner} <> ${ZERO_ADDRESS} then ${nfts.owner}
+        when ${locks.user} <> ${ZERO_ADDRESS} then ${locks.user}
+        else ${ZERO_ADDRESS}
+      end`,
+      sql`case
+        when ${nfts.tokenId} is not null and ${nfts.owner} = ${ZERO_ADDRESS} then 'unknown_until_transfer'
+        when ${nfts.tokenId} is null and ${locks.user} = ${ZERO_ADDRESS} then 'unknown_until_transfer'
+        else 'known'
+      end`,
+      nfts.genesisRoundId,
+      nfts.genesisTierId,
     ),
 );
 
 export const unlock_cliffs_24h = onchainView("unlock_cliffs_24h").as((qb) =>
   qb.select({
-    id: position_current_state.id,
-    chainId: position_current_state.chainId,
-    owner: position_current_state.owner,
-    ownerSource: position_current_state.ownerSource,
-    ownerStatus: position_current_state.ownerStatus,
-    tokenId: position_current_state.tokenId,
-    positionId: position_current_state.positionId,
-    amount: position_current_state.amount,
-    weight: position_current_state.weight,
-    estimatedUnlockTimestamp: position_current_state.estimatedUnlockTimestamp,
-    isWrapped: position_current_state.isWrapped,
-    isGenesis: position_current_state.isGenesis,
+    id: locks.id,
+    chainId: locks.chainId,
+    owner: sql<string>`case
+      when ${nfts.tokenId} is not null and ${nfts.owner} <> ${ZERO_ADDRESS} then ${nfts.owner}
+      when ${nfts.tokenId} is not null and ${nfts.owner} = ${ZERO_ADDRESS} then ${ZERO_ADDRESS}
+      when ${locks.user} <> ${ZERO_ADDRESS} then ${locks.user}
+      else ${ZERO_ADDRESS}
+    end`.as("owner"),
+    ownerSource: sql<string>`case
+      when ${nfts.tokenId} is not null and ${nfts.owner} <> ${ZERO_ADDRESS} then 'nft_owner'
+      when ${nfts.tokenId} is not null and ${nfts.owner} = ${ZERO_ADDRESS} then 'nft_owner_unknown'
+      when ${locks.user} <> ${ZERO_ADDRESS} then 'engine_lock_owner'
+      else 'unknown'
+    end`.as("ownerSource"),
+    ownerStatus: sql<string>`case
+      when ${nfts.tokenId} is not null and ${nfts.owner} = ${ZERO_ADDRESS} then 'unknown_until_transfer'
+      when ${nfts.tokenId} is null and ${locks.user} = ${ZERO_ADDRESS} then 'unknown_until_transfer'
+      else 'known'
+    end`.as("ownerStatus"),
+    tokenId: nfts.tokenId,
+    positionId: locks.lockId,
+    amount: locks.amount,
+    weight: locks.weight,
+    estimatedUnlockTimestamp: sql<number>`(${locks.timestamp} + (((${locks.unlockEpoch} - ${locks.activationEpoch})::numeric * ${epochLengthSecondsSql})::integer))`.as("estimatedUnlockTimestamp"),
+    isWrapped: sql<number>`case when ${nfts.tokenId} is null then 0 else 1 end`.as("isWrapped"),
+    isGenesis: sql<number>`coalesce(${nfts.isGenesis}, 0)`.as("isGenesis"),
   })
-    .from(position_current_state)
+    .from(locks)
+    .leftJoin(nfts, and(eq(locks.chainId, nfts.chainId), eq(locks.lockId, nfts.positionId)))
     .where(and(
-      eq(position_current_state.status, "locked"),
-      gte(position_current_state.estimatedUnlockTimestamp, nowEpochSecondsSql),
-      lte(position_current_state.estimatedUnlockTimestamp, sql<number>`(${nowEpochSecondsSql} + 86400)`),
+      eq(locks.status, "locked"),
+      sql`(${locks.timestamp} + (((${locks.unlockEpoch} - ${locks.activationEpoch})::numeric * ${epochLengthSecondsSql})::integer)) between ${nowEpochSecondsSql} and (${nowEpochSecondsSql} + 86400)`,
     )),
 );
 
 export const unlock_cliffs_7d = onchainView("unlock_cliffs_7d").as((qb) =>
   qb.select({
-    id: position_current_state.id,
-    chainId: position_current_state.chainId,
-    owner: position_current_state.owner,
-    ownerSource: position_current_state.ownerSource,
-    ownerStatus: position_current_state.ownerStatus,
-    tokenId: position_current_state.tokenId,
-    positionId: position_current_state.positionId,
-    amount: position_current_state.amount,
-    weight: position_current_state.weight,
-    estimatedUnlockTimestamp: position_current_state.estimatedUnlockTimestamp,
-    isWrapped: position_current_state.isWrapped,
-    isGenesis: position_current_state.isGenesis,
+    id: locks.id,
+    chainId: locks.chainId,
+    owner: sql<string>`case
+      when ${nfts.tokenId} is not null and ${nfts.owner} <> ${ZERO_ADDRESS} then ${nfts.owner}
+      when ${nfts.tokenId} is not null and ${nfts.owner} = ${ZERO_ADDRESS} then ${ZERO_ADDRESS}
+      when ${locks.user} <> ${ZERO_ADDRESS} then ${locks.user}
+      else ${ZERO_ADDRESS}
+    end`.as("owner"),
+    ownerSource: sql<string>`case
+      when ${nfts.tokenId} is not null and ${nfts.owner} <> ${ZERO_ADDRESS} then 'nft_owner'
+      when ${nfts.tokenId} is not null and ${nfts.owner} = ${ZERO_ADDRESS} then 'nft_owner_unknown'
+      when ${locks.user} <> ${ZERO_ADDRESS} then 'engine_lock_owner'
+      else 'unknown'
+    end`.as("ownerSource"),
+    ownerStatus: sql<string>`case
+      when ${nfts.tokenId} is not null and ${nfts.owner} = ${ZERO_ADDRESS} then 'unknown_until_transfer'
+      when ${nfts.tokenId} is null and ${locks.user} = ${ZERO_ADDRESS} then 'unknown_until_transfer'
+      else 'known'
+    end`.as("ownerStatus"),
+    tokenId: nfts.tokenId,
+    positionId: locks.lockId,
+    amount: locks.amount,
+    weight: locks.weight,
+    estimatedUnlockTimestamp: sql<number>`(${locks.timestamp} + (((${locks.unlockEpoch} - ${locks.activationEpoch})::numeric * ${epochLengthSecondsSql})::integer))`.as("estimatedUnlockTimestamp"),
+    isWrapped: sql<number>`case when ${nfts.tokenId} is null then 0 else 1 end`.as("isWrapped"),
+    isGenesis: sql<number>`coalesce(${nfts.isGenesis}, 0)`.as("isGenesis"),
   })
-    .from(position_current_state)
+    .from(locks)
+    .leftJoin(nfts, and(eq(locks.chainId, nfts.chainId), eq(locks.lockId, nfts.positionId)))
     .where(and(
-      eq(position_current_state.status, "locked"),
-      gte(position_current_state.estimatedUnlockTimestamp, nowEpochSecondsSql),
-      lte(position_current_state.estimatedUnlockTimestamp, sql<number>`(${nowEpochSecondsSql} + 604800)`),
+      eq(locks.status, "locked"),
+      sql`(${locks.timestamp} + (((${locks.unlockEpoch} - ${locks.activationEpoch})::numeric * ${epochLengthSecondsSql})::integer)) between ${nowEpochSecondsSql} and (${nowEpochSecondsSql} + 604800)`,
     )),
 );
 
@@ -879,7 +953,7 @@ export const position_owner_history = onchainView("position_owner_history").as((
     positionId: nfts.positionId,
     from: nft_transfers.from,
     to: nft_transfers.to,
-    ownerStatus: sql<string>`case when ${nft_transfers.to} = ${ZERO_ADDRESS} then 'unknown_until_transfer' else 'known' end`,
+    ownerStatus: sql<string>`case when ${nft_transfers.to} = ${ZERO_ADDRESS} then 'unknown_until_transfer' else 'known' end`.as("ownerStatus"),
     blockNumber: nft_transfers.blockNumber,
     txHash: nft_transfers.txHash,
     logIndex: nft_transfers.logIndex,
