@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "ponder dev",
-    "start": "ponder start",
+    "start": "ponder start --schema public",
     "db": "ponder db",
     "codegen": "ponder codegen",
     "sync:abis": "node scripts/syncV4AbisFromHardhat.mjs",
