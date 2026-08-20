@@ -91,6 +91,12 @@ validation-only local URL; it does not connect to that database.
 
 ## Monitoring Cycle
 
+`npm run check:epoch-health`
+: Reads `currentEpoch()` and the settled epoch from the active v4 engine at one
+Base block, classifies the backlog, and routes the result through configured
+read-only notification outputs. It is GREEN at 0-1 epochs, YELLOW at 2-8, and
+RED above the engine's eight-epoch JIT limit.
+
 `npm run scan:failed`
 : Runs one read-only failed transaction scan over active v4 contracts.
 
@@ -107,7 +113,8 @@ delivery rows.
 
 `npm run monitor:cycle`
 : Runs one safe read-only cycle:
-`validate:v4-env`, `scan:failed`, `commander`, `summarize`, `notify`.
+`validate:v4-env`, `check:epoch-health`, `scan:failed`, `commander`,
+`summarize`, `notify`.
 
 `npm run monitor:cycle:dry-run`
 : Prints the single-cycle plan without executing commands. This is the

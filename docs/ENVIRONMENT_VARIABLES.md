@@ -31,6 +31,11 @@ print key names and whether a key is present.
 : Deployed engine epoch length in seconds. Do not assume the default unless the
 deployment config confirms it.
 
+`V4_MAX_EPOCH_BACKLOG`
+: Maximum backlog considered healthy by the direct-state epoch poll. Defaults
+to `1`. A backlog above eight is always RED because it exceeds the engine's
+user-call JIT settlement limit.
+
 `COMMANDER_SQL_URL`
 : Read-only Ponder SQL endpoint. Defaults to `http://localhost:42069/sql`.
 

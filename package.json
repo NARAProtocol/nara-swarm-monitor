@@ -12,6 +12,7 @@
     "validate:v4-env": "node scripts/validateFreshV4Env.mjs",
     "validate:env": "node scripts/validateFreshV4Env.mjs",
     "scan:failed": "node scripts/scanFailedTransactions.mjs",
+    "check:epoch-health": "node scripts/checkEpochHealth.mjs",
     "commander": "node scripts/commander.mjs",
     "summarize": "node scripts/summarize.mjs",
     "notify": "node scripts/notify.mjs",

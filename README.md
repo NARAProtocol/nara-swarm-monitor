@@ -25,6 +25,7 @@ stops startup instead of silently monitoring the wrong contracts.
 - Scans reverted transactions involving monitored contracts.
 - Produces structured Commander reports and deterministic AI summaries.
 - Routes notifications to console, Discord, Telegram, or generic webhooks.
+- Polls engine epoch freshness directly so a stalled keeper is detected before user calls fail.
 - Serves monitoring data through a bounded, read-only API.
 
 ## Architecture

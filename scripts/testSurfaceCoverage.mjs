@@ -84,7 +84,7 @@ assert.equal(evaluateSurfaceObservation({
 assert.equal(evaluateSurfaceObservation({
   kind: "epoch_backlog", surface: "engine", eventName: "freshnessPoll",
   chainId: 8453, backlog: 9n,
-})[0].ruleId, "epoch_backlog_above_jit_limit");
+})[0].severity, 5, "backlog beyond the JIT limit is critical");
 
 console.log("Active v4 surface coverage and deterministic alert tests passed.");
 

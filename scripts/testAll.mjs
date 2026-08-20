@@ -9,4 +9,5 @@ import "./testNotifications.mjs";
 import "./testOperatorPackaging.mjs";
 import "./testEnvValidation.mjs";
 import "./testSurfaceCoverage.mjs";
+import "./testEpochHealth.mjs";
 import "./testEcosystemAbiDrift.mjs";

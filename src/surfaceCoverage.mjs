@@ -142,7 +142,7 @@ export function evaluateSurfaceObservation(observation) {
   if (observation.kind === "epoch_backlog" && observation.backlog > 8n) {
     alerts.push({
       ruleId: "epoch_backlog_above_jit_limit",
-      severity: 4,
+      severity: 5,
       fingerprint: String(observation.chainId),
       evidence: { ...evidence, backlog: observation.backlog.toString(), thresholdValue: "8" },
     });
