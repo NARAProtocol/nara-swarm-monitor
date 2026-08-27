@@ -9,6 +9,7 @@ import {
 } from "../agents/aiSummarizer";
 import {
   postgresClientConfig,
+  ponderSqlQuery,
   rowsFromPonderSqlResponse,
 } from "./sqlRows";
 
@@ -17,7 +18,7 @@ function sqlEndpoint(): string {
 }
 
 async function queryPonderSql(baseUrl: string, sql: string): Promise<Record<string, unknown>[]> {
-  const query = encodeURIComponent(superjson.stringify({ sql }));
+  const query = encodeURIComponent(superjson.stringify(ponderSqlQuery(sql)));
   const response = await fetch(`${baseUrl}/db?sql=${query}`, { method: "GET" });
   if (!response.ok) {
     throw new Error(`Ponder SQL query failed (${response.status}): ${await response.text()}`);

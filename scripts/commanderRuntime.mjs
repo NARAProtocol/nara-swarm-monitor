@@ -2,6 +2,7 @@ import superjson from "superjson";
 import pg from "pg";
 import {
   postgresClientConfig,
+  ponderSqlQuery,
   rowsFromPonderSqlResponse,
 } from "./sqlRuntime.mjs";
 
@@ -417,7 +418,8 @@ export function createPonderSqlCommanderReader(baseUrl = (process.env.COMMANDER_
   return {
     async readView(viewName, limit) {
       if (!COMMANDER_VIEW_NAMES.includes(viewName)) throw new Error(`Unsupported Commander view: ${viewName}`);
-      const query = encodeURIComponent(superjson.stringify({ sql: `select * from ${viewName} limit ${Math.max(1, Math.min(limit, 250))}` }));
+      const sql = `select * from ${viewName} limit ${Math.max(1, Math.min(limit, 250))}`;
+      const query = encodeURIComponent(superjson.stringify(ponderSqlQuery(sql)));
       const response = await fetch(`${baseUrl}/db?sql=${query}`);
       if (!response.ok) throw new Error(`Ponder SQL query failed (${response.status}): ${await response.text()}`);
       const body = await response.json();
