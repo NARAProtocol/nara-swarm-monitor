@@ -55,11 +55,24 @@ DEPLOYER_ADDRESS=0xAE9D1667B45558232BeD9d45DcCA53940F892aB5
 NOTIFY_CHANNELS=telegram,console
 TELEGRAM_BOT_TOKEN=YOUR_BOT_TOKEN
 TELEGRAM_CHAT_ID=YOUR_CHAT_ID
+LARGE_BUY_ALERT_ENABLED=true
+LARGE_BUY_ALERT_MIN_USDC=100
+LARGE_BUY_ALERT_START_BLOCK=FIRST_FUTURE_BASE_BLOCK_AT_ACTIVATION
+LARGE_BUY_ALERT_POLL_SECONDS=10
+LARGE_BUY_ALERT_CONFIRMATIONS=2
+LARGE_BUY_ALERT_MAX_BLOCKS_PER_SCAN=500
+V4_USDC_TOKEN=VERIFIED_BASE_USDC_ADDRESS
 NOTIFY_YELLOW=true
 MONITOR_CYCLE_INTERVAL_SECONDS=600
 ```
 
 *(Note: Replace `BASE_RPC_URL`, `TELEGRAM_BOT_TOKEN`, and `TELEGRAM_CHAT_ID` with your own credentials). Keep `DATABASE_SCHEMA` dedicated to this monitor; do not reuse a schema owned by another Ponder app.*
+
+The large-buy watcher reads only the canonical Hook's `PoolFeeTaken` event. It
+requires the verified pool ID and USDC address, persists a block cursor and
+delivery records in Postgres, retries failed sends, and waits two Base blocks
+before notifying. Set `LARGE_BUY_ALERT_START_BLOCK` to the first future block
+when enabling it so historical buys cannot generate Telegram alerts.
 
 For an existing production schema, a runtime-only deployment may set
 `PONDER_EXPERIMENTAL_DB=platform` only after confirming that

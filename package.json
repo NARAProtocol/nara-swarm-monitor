@@ -14,6 +14,8 @@
     "scan:failed": "node scripts/scanFailedTransactions.mjs",
     "check:epoch-health": "node scripts/checkEpochHealth.mjs",
     "check:epoch-sentinel": "node scripts/checkEpochHealth.mjs --sentinel",
+    "watch:large-buys": "node scripts/largeBuyWatcher.mjs",
+    "test:large-buy-alerts": "node scripts/testLargeBuyWatcherRuntime.mjs",
     "commander": "node scripts/commander.mjs",
     "summarize": "node scripts/summarize.mjs",
     "notify": "node scripts/notify.mjs",

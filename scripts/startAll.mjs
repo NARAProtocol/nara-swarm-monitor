@@ -20,6 +20,7 @@ const runtimeEnv = {
 let shuttingDown = false;
 let ponder;
 let bot;
+let largeBuyWatcher;
 
 function scheduleRestart(label, start) {
   if (shuttingDown) return;
@@ -73,7 +74,32 @@ if (process.env.TELEGRAM_BOT_TOKEN) {
   startTelegramBot();
 }
 
-// 3. Independent epoch sentinel. It has no Ponder, database, Commander, or
+// 3. Independent large-buy watcher. It reads only the canonical Hook event,
+// persists its cursor/deliveries in Postgres, and sends Telegram notifications.
+if (["true", "1"].includes(String(process.env.LARGE_BUY_ALERT_ENABLED || "false").toLowerCase())) {
+  const startLargeBuyWatcher = () => {
+    let stopped = false;
+    const handleStop = () => {
+      if (stopped) return;
+      stopped = true;
+      largeBuyWatcher = undefined;
+      scheduleRestart("Large-buy watcher", startLargeBuyWatcher);
+    };
+    console.log("🐋 Starting canonical NARA/USDC large-buy watcher...");
+    largeBuyWatcher = spawn(process.execPath, ["scripts/largeBuyWatcher.mjs"], {
+      stdio: "inherit",
+      env: runtimeEnv,
+    });
+    largeBuyWatcher.on("exit", handleStop);
+    largeBuyWatcher.on("error", (error) => {
+      console.error("Large-buy watcher failed to start:", error.message);
+      handleStop();
+    });
+  };
+  startLargeBuyWatcher();
+}
+
+// 4. Independent epoch sentinel. It has no Ponder, database, Commander, or
 // summarizer dependency and runs more frequently than the broad monitor cycle.
 const epochSentinelIntervalSeconds = Number(process.env.EPOCH_SENTINEL_INTERVAL_SECONDS || "300");
 if (!Number.isSafeInteger(epochSentinelIntervalSeconds) || epochSentinelIntervalSeconds < 60) {
@@ -106,7 +132,7 @@ function runEpochSentinel() {
 setTimeout(runEpochSentinel, 10_000);
 setInterval(runEpochSentinel, epochSentinelIntervalSeconds * 1000);
 
-// 4. Autonomous broad monitor cycle (every 10 minutes by default)
+// 5. Autonomous broad monitor cycle (every 10 minutes by default)
 const intervalSeconds = Number(process.env.MONITOR_CYCLE_INTERVAL_SECONDS || "600");
 if (!Number.isSafeInteger(intervalSeconds) || intervalSeconds < 60) {
   throw new Error("MONITOR_CYCLE_INTERVAL_SECONDS must be an integer of at least 60 seconds");
@@ -149,6 +175,7 @@ for (const signal of ["SIGINT", "SIGTERM"]) {
     shuttingDown = true;
     ponder?.kill("SIGTERM");
     bot?.kill("SIGTERM");
+    largeBuyWatcher?.kill("SIGTERM");
     process.exit(0);
   });
 }
