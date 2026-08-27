@@ -28,6 +28,26 @@ The message includes the transaction initiator, gross USDC input, Hook fee,
 fee BPS, Base block, and BaseScan transaction link. It waits two Base blocks,
 polls every ten seconds, and scans at most 500 blocks per catch-up request.
 
+## Message contract and approved next iteration
+
+The deployed message contract remains the one documented above. In particular,
+it does not yet calculate actual NARA received, before/after pool price,
+transaction timestamp, or repeat-buyer history.
+
+The approved user-facing order for a future message-format enhancement is:
+
+1. gross USDC spent;
+2. actual NARA received;
+3. NARA price before and after the buy, including percentage movement;
+4. buyer wallet, classified as new or repeat only from persisted evidence; and
+5. transaction time with a BaseScan transaction link.
+
+Hook fee and fee rate remain useful secondary operator details, but are not one
+of the five headline user stats. The missing fields must be derived from the
+canonical successful receipt, pool state at pinned blocks, and persisted
+history. They must not be estimated from the alert threshold or described as
+implemented until deterministic tests and deployed receipt evidence exist.
+
 ## Reliability and privacy
 
 - A Postgres block cursor survives process and Railway restarts.
