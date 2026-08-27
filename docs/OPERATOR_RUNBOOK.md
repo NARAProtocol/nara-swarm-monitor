@@ -68,9 +68,16 @@ npm run check:epoch-health
 ```
 
 This reads the current and settled engine epochs at one Base block and routes a
-deterministic GREEN, YELLOW, or RED notification. A backlog above eight is RED
-because user mutations cannot settle it through the engine's JIT path. The
-check never creates a signer or sends a transaction.
+deterministic GREEN, YELLOW, or RED notification. Production warns at backlog
+two and pages at backlog five, before user mutations become blocked above the
+Engine's eight-epoch JIT path. Configured backup RPCs are tried sequentially.
+The check never creates a signer or sends a transaction.
+
+Production `npm run start` launches `check:epoch-sentinel` independently every
+five minutes. It has no Ponder, Commander, summarizer, or database dependency,
+repeats an unchanged incident every 30 minutes, and immediately reports status
+transitions and recovery. The parent runtime supervises and restarts Ponder and
+the interactive Telegram listener without terminating the sentinel loop.
 
 ### Step 4: Run Ponder Indexer
 
@@ -151,14 +158,14 @@ The cycle runs:
 
 ```text
 validate:v4-env
-check:epoch-health
 scan:failed
 commander
 summarize
 notify
 ```
 
-It intentionally does not start long-running Ponder.
+It intentionally does not duplicate the separately scheduled epoch sentinel or
+start long-running Ponder.
 
 Dry run:
 

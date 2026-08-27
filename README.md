@@ -24,7 +24,8 @@ stops startup instead of silently monitoring the wrong contracts.
 - Evaluates evidence-backed alert rules with deduplication and severity 1–5 scoring.
 - Scans reverted transactions involving monitored contracts.
 - Produces structured Commander reports and deterministic AI summaries.
-- Autonomous 10-minute background diagnostic heartbeat executing continuous sentinel cycles.
+- Independent five-minute epoch sentinel with RPC failover and bounded alert repeats.
+- Autonomous 10-minute background diagnostic cycle for indexed and database-backed checks.
 - Interactive Telegram Console Bot (`@naraswarmbot`) with native chat menu (`/wallet`, `/health`, `/whales`, `/cliffs`, `/status`, `/contracts`, `/ping`).
 - Real-time Crypto Alpha Dossier generator decoding on-chain locks, weights, and accruing yield.
 - Routes proactive emergency alerts to Telegram, Discord, console, or generic webhooks.
@@ -38,11 +39,13 @@ flowchart LR
     Base["Base RPC"] --> Ponder["Ponder indexer"]
     Ponder --> Postgres[("PostgreSQL")]
     Base --> Scanner["Failed transaction scanner"]
+    Base --> Epoch["Independent epoch sentinel"]
     Scanner --> Postgres
     Postgres --> Rules["Rule engine"]
     Postgres --> Commander["Commander reports"]
     Commander --> Summary["Deterministic summary"]
     Rules --> Notify["Notification router"]
+    Epoch --> Notify
     Summary --> Notify
     Postgres --> API["Read-only API"]
 ```

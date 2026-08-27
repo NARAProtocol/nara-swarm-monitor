@@ -36,7 +36,10 @@ COMMANDER_SQL_URL=http://127.0.0.1:8080/sql
 API_PORT=8080
 V4_START_BLOCK=49719008
 V4_EPOCH_LENGTH_SECONDS=900
-V4_MAX_EPOCH_BACKLOG=8
+V4_MAX_EPOCH_BACKLOG=1
+V4_EPOCH_CRITICAL_BACKLOG=5
+EPOCH_SENTINEL_INTERVAL_SECONDS=300
+EPOCH_ALERT_REPEAT_SECONDS=1800
 FAILED_TX_SCAN_MAX_BLOCKS=512
 V4_NARA_TOKEN=0xB6333F5D4cEd8dffA80F3F13697D6aA3BB3f19c1
 V4_ENGINE=0x98ab6406D6B548F37dEF7110961bb45A399e5aFC
@@ -86,4 +89,5 @@ downstream handoff explicitly enable that surface.
 2. You will see:
    * **Ponder Indexer:** Syncing events and live blocks on Base from block `49719008`.
    * **Telegram Console:** `🤖 Telegram bot command listener started with Menu registered...`
-   * **Autonomous Swarm Scheduler:** Running the 6-step diagnostic cycle every 10 minutes (`600s`).
+   * **Epoch Sentinel:** Reading Base independently every 5 minutes (`300s`), warning at backlog 2 and paging at backlog 5.
+   * **Autonomous Swarm Scheduler:** Running the broader 5-step diagnostic cycle every 10 minutes (`600s`).
