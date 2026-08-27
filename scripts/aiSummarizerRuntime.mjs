@@ -1,6 +1,10 @@
 import { createHash } from "node:crypto";
 import superjson from "superjson";
 import pg from "pg";
+import {
+  postgresClientConfig,
+  rowsFromPonderSqlResponse,
+} from "./sqlRuntime.mjs";
 
 export const AI_SUMMARY_SYSTEM_PROMPT = [
   "You are a read-only NARA monitor summarizer.",
@@ -176,14 +180,11 @@ export async function queryPonderSql(baseUrl, sql) {
   const response = await fetch(`${baseUrl.replace(/\/$/, "")}/db?sql=${query}`);
   if (!response.ok) throw new Error(`Ponder SQL query failed (${response.status}): ${await response.text()}`);
   const body = await response.json();
-  if (Array.isArray(body)) return body;
-  if (Array.isArray(body?.rows)) return body.rows;
-  if (Array.isArray(body?.result?.rows)) return body.result.rows;
-  return [];
+  return rowsFromPonderSqlResponse(body);
 }
 
 export async function readLatestCommanderReport(baseUrl = process.env.COMMANDER_SQL_URL || "http://localhost:42069/sql") {
-  const rows = await queryPonderSql(baseUrl, 'select * from commander_reports order by "createdAt" desc limit 1');
+  const rows = await queryPonderSql(baseUrl, "select * from commander_reports order by created_at desc limit 1");
   if (rows.length === 0) throw new Error("No commander_reports rows available. Run/store Commander v1 before summarizing.");
   return rows[0];
 }
@@ -192,27 +193,27 @@ export async function storeAiSummary(summary, databaseUrl = process.env.DATABASE
   if (!databaseUrl) {
     throw new Error("DATABASE_URL is required to store ai_summaries.");
   }
-  const client = new pg.Client({ connectionString: databaseUrl });
+  const client = new pg.Client(postgresClientConfig(databaseUrl));
   await client.connect();
   try {
     await client.query(
       `insert into ai_summaries (
-        id, "chainId", "commanderReportId", "modelProvider", "modelName",
-        status, severity, "summaryText", "operatorSummary", "riskSummary",
-        "recommendedActionsText", "evidenceJson", "inputHash", "outputHash", "createdAt"
+        id, chain_id, commander_report_id, model_provider, model_name,
+        status, severity, summary_text, operator_summary, risk_summary,
+        recommended_actions_text, evidence_json, input_hash, output_hash, created_at
       ) values (
         $1, $2, $3, $4, $5,
         $6, $7, $8, $9, $10,
         $11, $12, $13, $14, $15
       )
       on conflict (id) do update set
-        "summaryText" = excluded."summaryText",
-        "operatorSummary" = excluded."operatorSummary",
-        "riskSummary" = excluded."riskSummary",
-        "recommendedActionsText" = excluded."recommendedActionsText",
-        "evidenceJson" = excluded."evidenceJson",
-        "outputHash" = excluded."outputHash",
-        "createdAt" = excluded."createdAt"`,
+        summary_text = excluded.summary_text,
+        operator_summary = excluded.operator_summary,
+        risk_summary = excluded.risk_summary,
+        recommended_actions_text = excluded.recommended_actions_text,
+        evidence_json = excluded.evidence_json,
+        output_hash = excluded.output_hash,
+        created_at = excluded.created_at`,
       [
         summary.id,
         summary.chainId,
