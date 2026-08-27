@@ -128,7 +128,6 @@ console.log(`Env validity: ${status.ok ? "ok" : "not ok"}`);
 if (status.missing.length > 0) console.log(`Missing env keys: ${status.missing.join(", ")}`);
 if (status.invalid.length > 0) console.log(`Invalid or retired address keys: ${status.invalid.join(", ")}`);
 console.log(`API config: host=${apiHost} port=${apiPort} readOnly=${apiReadOnly} maxLimit=${apiMaxLimit}`);
-console.log(`Database schema: ${databaseSchema}`);
 
 if (!env.DATABASE_URL) {
   console.log("DB connection: unavailable (DATABASE_URL missing)");
