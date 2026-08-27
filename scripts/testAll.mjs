@@ -11,4 +11,5 @@ import "./testOperatorPackaging.mjs";
 import "./testEnvValidation.mjs";
 import "./testSurfaceCoverage.mjs";
 import "./testEpochHealth.mjs";
+import "./testSqlRuntime.mjs";
 import "./testEcosystemAbiDrift.mjs";
