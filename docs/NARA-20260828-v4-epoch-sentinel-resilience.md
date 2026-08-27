@@ -53,6 +53,21 @@ resumed its existing backfill through crash recovery. A forced-primary-failure
 rehearsal selected configured fallback provider `1` without printing a provider
 URL.
 
-This activation does not clear the onchain backlog. The protocol-side keeper
-remains the only write path, and the monitor still contains no signer,
+This activation did not itself clear the onchain backlog. The protocol-side
+keeper remains the only write path, and the monitor still contains no signer,
 credential, workflow dispatch, or transaction code.
+
+## Recovery observation
+
+After the operator-approved protocol workflow dispatch `33123323400` confirmed
+`advanceEpochs(100)` and `advanceEpochs(19)`, the sentinel's next independent
+poll observed GREEN, backlog `0`, at Base block `50540546` and routed
+`notification=recovered`. The preceding hosted observations were RED backlog
+`118` with cooldown, RED backlog `119` with the 30-minute repeat, and RED
+backlog `119` with cooldown. This proves the deployed sentinel reported both
+the unresolved incident and its recovery without participating in the write.
+
+The receipt-pinned protocol readback and transaction evidence are recorded in
+`NARAProtocol/nara_protocol_v4` release record
+`docs/releases/NARA-20260828-v4-epoch-maintainer-resilience.md` at immutable
+commit `2dd03ac62c919cc5d4757a461723777074756088`.
