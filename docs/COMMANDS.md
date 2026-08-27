@@ -101,7 +101,8 @@ RED above the engine's eight-epoch JIT limit.
 : Runs one read-only failed transaction scan over active v4 contracts.
 
 `npm run commander`
-: Builds a deterministic Commander report from indexed views and alerts.
+: Builds a deterministic Commander report from indexed views and alerts and
+stores it in `commander_reports` for the downstream summary stage.
 
 `npm run summarize`
 : Builds an AI summary from the latest Commander report. The default
@@ -121,9 +122,10 @@ delivery rows.
 cross-platform dry-run command.
 
 `npm run monitor:health`
-: Prints env validity, DB connection status, latest indexed block, latest
-Commander report time, open severity 5 count, latest failed transaction scan
-time, and API config without secret values.
+: Prints env validity, DB connection status, Ponder's committed checkpoint and
+historical readiness, Ponder heartbeat, latest Commander/AI/delivery times,
+open severity 5 count, latest recorded failed transaction time, and API config
+without secret values.
 
 ## Tests
 

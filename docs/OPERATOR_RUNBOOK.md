@@ -106,7 +106,8 @@ npm run commander
 ```
 
 Commander v1 reads existing monitor views and alerts, then creates a
-deterministic status report. It does not call contracts or raw chain state.
+deterministic status report and stores it in `commander_reports`. It does not
+call contracts or raw chain state.
 
 ### Step 7: Generate AI Summary
 
@@ -175,10 +176,12 @@ The health check prints:
 
 - environment validity by key name only
 - DB connection status
-- latest indexed block if available
+- latest committed Ponder checkpoint if available
+- historical indexing readiness and Ponder heartbeat
 - latest Commander report time
+- latest AI summary and notification delivery times
 - open severity 5 alert count
-- latest failed transaction scan time if available
+- latest recorded failed transaction time if available
 - API config summary without secret values
 
 ## Hardening Checks

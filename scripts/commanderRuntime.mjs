@@ -1,4 +1,9 @@
 import superjson from "superjson";
+import pg from "pg";
+import {
+  postgresClientConfig,
+  rowsFromPonderSqlResponse,
+} from "./sqlRuntime.mjs";
 
 export const COMMANDER_VIEW_NAMES = [
   "open_alerts",
@@ -304,6 +309,69 @@ export function commanderReportToRow(report) {
   };
 }
 
+export async function storeCommanderReport(report, databaseUrl = process.env.DATABASE_URL) {
+  if (!databaseUrl) throw new Error("DATABASE_URL is required to store commander_reports.");
+  const row = commanderReportToRow(report);
+  const client = new pg.Client(postgresClientConfig(databaseUrl));
+  await client.connect();
+  try {
+    await client.query(
+      `insert into commander_reports (
+        id, chain_id, status, severity, title, summary, main_event,
+        protocol_activity_json, wallet_activity_json, position_activity_json,
+        admin_activity_json, treasury_activity_json, router_activity_json,
+        failed_tx_activity_json, risk_summary_json, recommended_actions_json,
+        evidence_json, requires_human_decision, created_at
+      ) values (
+        $1, $2, $3, $4, $5, $6, $7,
+        $8, $9, $10, $11, $12, $13,
+        $14, $15, $16, $17, $18, $19
+      )
+      on conflict (id) do update set
+        status = excluded.status,
+        severity = excluded.severity,
+        title = excluded.title,
+        summary = excluded.summary,
+        main_event = excluded.main_event,
+        protocol_activity_json = excluded.protocol_activity_json,
+        wallet_activity_json = excluded.wallet_activity_json,
+        position_activity_json = excluded.position_activity_json,
+        admin_activity_json = excluded.admin_activity_json,
+        treasury_activity_json = excluded.treasury_activity_json,
+        router_activity_json = excluded.router_activity_json,
+        failed_tx_activity_json = excluded.failed_tx_activity_json,
+        risk_summary_json = excluded.risk_summary_json,
+        recommended_actions_json = excluded.recommended_actions_json,
+        evidence_json = excluded.evidence_json,
+        requires_human_decision = excluded.requires_human_decision,
+        created_at = excluded.created_at`,
+      [
+        row.id,
+        row.chainId,
+        row.status,
+        row.severity,
+        row.title,
+        row.summary,
+        row.mainEvent,
+        row.protocolActivityJson,
+        row.walletActivityJson,
+        row.positionActivityJson,
+        row.adminActivityJson,
+        row.treasuryActivityJson,
+        row.routerActivityJson,
+        row.failedTxActivityJson,
+        row.riskSummaryJson,
+        row.recommendedActionsJson,
+        row.evidenceJson,
+        row.requiresHumanDecision,
+        row.createdAt,
+      ],
+    );
+  } finally {
+    await client.end();
+  }
+}
+
 export function formatCommanderReport(report) {
   const actions = report.recommendedActions.map((action) => `- ${action}`).join("\n");
   const evidence = report.evidence.slice(0, 12).map((item) => `- ${item.source} ${item.sourceRowId}: ${item.note}`).join("\n");
@@ -353,11 +421,7 @@ export function createPonderSqlCommanderReader(baseUrl = (process.env.COMMANDER_
       const response = await fetch(`${baseUrl}/db?sql=${query}`);
       if (!response.ok) throw new Error(`Ponder SQL query failed (${response.status}): ${await response.text()}`);
       const body = await response.json();
-      if (Array.isArray(body)) return body;
-      if (Array.isArray(body?.rows)) return body.rows;
-      if (Array.isArray(body?.result?.rows)) return body.result.rows;
-      return [];
+      return rowsFromPonderSqlResponse(body);
     },
   };
 }
-

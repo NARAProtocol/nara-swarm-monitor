@@ -101,9 +101,9 @@ function envStatus(env) {
   return { missing, invalid, ok: missing.length === 0 && invalid.length === 0 };
 }
 
-async function tryQuery(client, sql, fallback = "unavailable") {
+async function tryQuery(client, sql, params = [], fallback = "unavailable") {
   try {
-    const result = await client.query(sql);
+    const result = await client.query(sql, params);
     return result.rows[0]?.value ?? fallback;
   } catch {
     return fallback;
@@ -114,6 +114,12 @@ function formatTime(epochSeconds) {
   const value = Number(epochSeconds);
   if (!Number.isFinite(value) || value <= 0) return "unavailable";
   return new Date(value * 1000).toISOString();
+}
+
+function formatTimeMs(epochMilliseconds) {
+  const value = Number(epochMilliseconds);
+  if (!Number.isFinite(value) || value <= 0) return "unavailable";
+  return new Date(value).toISOString();
 }
 
 const env = loadEnv();
@@ -149,26 +155,40 @@ try {
   console.log("DB connection: ok");
 
   const latestIndexedBlock = await tryQuery(client, `
-    select greatest(
-      coalesce((select max("blockNumber") from erc20_transfers), 0),
-      coalesce((select max("blockNumber") from locks), 0),
-      coalesce((select max("blockNumber") from ops_router_events), 0),
-      coalesce((select max("blockNumber") from failed_transactions), 0)
-    ) as value
+    select substring(latest_checkpoint from 27 for 16)::bigint as value
+    from _ponder_checkpoint
+    where chain_id = $1::bigint
+      and latest_checkpoint ~ '^[0-9]{75}$'
+  `, [env.CHAIN_ID]);
+  const historicalComplete = await tryQuery(client, `
+    select (coalesce(value->>'is_ready', '0')::integer = 1)::text as value
+    from _ponder_meta
+    where key = 'app'
   `);
-  const latestCommanderAt = await tryQuery(client, 'select max("createdAt") as value from commander_reports');
-  const openSeverity5Count = await tryQuery(client, "select count(*)::integer as value from alerts where status = 'open' and severity = 5", 0);
+  const ponderHeartbeatAtMs = await tryQuery(client, `
+    select value->>'heartbeat_at' as value
+    from _ponder_meta
+    where key = 'app'
+  `);
+  const latestCommanderAt = await tryQuery(client, "select max(created_at) as value from commander_reports");
+  const latestAiSummaryAt = await tryQuery(client, "select max(created_at) as value from ai_summaries");
+  const latestNotificationAt = await tryQuery(client, "select max(created_at) as value from notification_deliveries");
+  const openSeverity5Count = await tryQuery(client, "select count(*)::integer as value from alerts where status = 'open' and severity = 5", [], 0);
   const latestFailedTxScanAt = await tryQuery(client, `
     select greatest(
       coalesce((select max(timestamp) from failed_transactions), 0),
-      coalesce((select max("updatedAt") from failed_tx_groups), 0)
+      coalesce((select max(updated_at) from failed_tx_groups), 0)
     ) as value
   `);
 
-  console.log(`Latest indexed block: ${latestIndexedBlock}`);
+  console.log(`Latest committed indexed block: ${latestIndexedBlock}`);
+  console.log(`Historical indexing complete: ${historicalComplete}`);
+  console.log(`Ponder heartbeat: ${formatTimeMs(ponderHeartbeatAtMs)}`);
   console.log(`Latest Commander report time: ${formatTime(latestCommanderAt)}`);
+  console.log(`Latest AI summary time: ${formatTime(latestAiSummaryAt)}`);
+  console.log(`Latest notification delivery time: ${formatTime(latestNotificationAt)}`);
   console.log(`Open severity 5 count: ${openSeverity5Count}`);
-  console.log(`Latest failed tx scan time: ${formatTime(latestFailedTxScanAt)}`);
+  console.log(`Latest recorded failed transaction time: ${formatTime(latestFailedTxScanAt)}`);
 } catch (error) {
   const message = error instanceof Error ? error.message : "unknown DB error";
   console.log(`DB connection: failed (${message})`);
