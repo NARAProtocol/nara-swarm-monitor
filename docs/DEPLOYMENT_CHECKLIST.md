@@ -24,6 +24,8 @@ Use this checklist before starting or restarting the monitor stack.
       schema owned by another Ponder app.
 - [ ] `V4_START_BLOCK` is set from the fresh v4 deployment.
 - [ ] `V4_EPOCH_LENGTH_SECONDS` is configured for the deployed engine.
+- [ ] `FAILED_TX_SCAN_MAX_BLOCKS` is bounded for the RPC plan; `512` is the
+      production default.
 - [ ] Fresh v4 contract addresses are set:
   - [ ] `V4_NARA_TOKEN`
   - [ ] `V4_ENGINE`
@@ -83,6 +85,8 @@ invent addresses or deploy unrelated components to satisfy it.
 - [ ] No secret printing appears in smoke commands or logs.
 - [ ] `BASE_RPC_URL` is read-only RPC access.
 - [ ] Ponder can connect to the database.
+- [ ] Recurring failed-transaction scans use a bounded rolling window and do
+      not duplicate the full Ponder backfill.
 - [ ] `COMMANDER_SQL_URL` points at the local Ponder SQL endpoint.
 - [ ] API binds to `127.0.0.1` by default.
 - [ ] API access is read-only.

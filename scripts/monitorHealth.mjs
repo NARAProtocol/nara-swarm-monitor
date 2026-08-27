@@ -27,6 +27,7 @@ const requiredCoreKeys = [
   "DATABASE_SCHEMA",
   "V4_START_BLOCK",
   "V4_EPOCH_LENGTH_SECONDS",
+  "FAILED_TX_SCAN_MAX_BLOCKS",
 ];
 
 const retiredAddresses = new Set([

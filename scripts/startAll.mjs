@@ -43,7 +43,14 @@ if (process.env.TELEGRAM_BOT_TOKEN) {
 const intervalSeconds = Number(process.env.MONITOR_CYCLE_INTERVAL_SECONDS || "600");
 console.log(`⏱️ Autonomous Swarm Monitor Cycle scheduled every ${intervalSeconds}s (10 min)`);
 
+let monitorCycleRunning = false;
+
 function runMonitorCycle() {
+  if (monitorCycleRunning) {
+    console.log(`⏭️ [${new Date().toISOString()}] Previous Autonomous Swarm Cycle is still running; skipping overlap.`);
+    return;
+  }
+  monitorCycleRunning = true;
   console.log(`\n🔄 [${new Date().toISOString()}] Executing Autonomous Swarm Cycle...`);
   const cycle = spawn(process.execPath, ["scripts/monitorCycle.mjs"], {
     stdio: "inherit",
@@ -51,7 +58,13 @@ function runMonitorCycle() {
   });
 
   cycle.on("exit", (code) => {
+    monitorCycleRunning = false;
     console.log(`✅ [${new Date().toISOString()}] Autonomous Swarm Cycle completed with status: ${code === 0 ? "SUCCESS" : "EXIT " + code}`);
+  });
+
+  cycle.on("error", (error) => {
+    monitorCycleRunning = false;
+    console.error("Autonomous Swarm Cycle failed to start:", error.message);
   });
 }
 

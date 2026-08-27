@@ -3,6 +3,7 @@ import "./testPositionIntelligence.mjs";
 import "./testWalletIntelligence.mjs";
 import "./testAlertRules.mjs";
 import "./testFailedTxScanner.mjs";
+import "./testFailedTxScanRange.mjs";
 import "./testCommander.mjs";
 import "./testAiSummarizer.mjs";
 import "./testNotifications.mjs";
