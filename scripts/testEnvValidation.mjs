@@ -88,6 +88,25 @@ expectFail(runValidation({ API_READ_ONLY: "false" }), /API_READ_ONLY/, "write-en
 expectFail(runValidation({ NOTIFY_CHANNELS: "webhook", WEBHOOK_URL: "" }), /WEBHOOK_URL/, "webhook channel requires webhook URL");
 expectFail(runValidation({ NOTIFY_CHANNELS: "telegram", TELEGRAM_BOT_TOKEN: "", TELEGRAM_CHAT_ID: "" }), /TELEGRAM_BOT_TOKEN|TELEGRAM_CHAT_ID/, "telegram channel requires token and chat");
 expectFail(
+  runValidation({ LARGE_BUY_ALERT_ENABLED: "true" }),
+  /V4_USDC_TOKEN|V4_UNISWAP_V4_POOL_ID|LARGE_BUY_ALERT_MIN_USDC|LARGE_BUY_ALERT_START_BLOCK|Telegram credentials/,
+  "large-buy alerts require canonical pool, USDC, forward start block, threshold, and Telegram",
+);
+expectPass(runValidation({
+  LARGE_BUY_ALERT_ENABLED: "true",
+  V4_USDC_TOKEN: "0x1111111111111111111111111111111111111111",
+  V4_UNISWAP_V4_POOL_ID: `0x${"22".repeat(32)}`,
+  LARGE_BUY_ALERT_MIN_USDC: "100",
+  LARGE_BUY_ALERT_START_BLOCK: "123",
+  LARGE_BUY_ALERT_POLL_SECONDS: "10",
+  LARGE_BUY_ALERT_CONFIRMATIONS: "2",
+  LARGE_BUY_ALERT_MAX_BLOCKS_PER_SCAN: "500",
+  TELEGRAM_BOT_TOKEN: "configured",
+  TELEGRAM_CHAT_ID: "123",
+  V4_TREASURY_ADDRESS: "0x3333333333333333333333333333333333333333",
+  DEPLOYER_ADDRESS: "0x4444444444444444444444444444444444444444",
+}), "large-buy alert configuration passes");
+expectFail(
   runValidation({ TELEGRAM_BOT_TOKEN: "configured", V4_TREASURY_ADDRESS: "", DEPLOYER_ADDRESS: "" }),
   /V4_TREASURY_ADDRESS|DEPLOYER_ADDRESS/,
   "Telegram listener requires manifest-backed classification addresses",

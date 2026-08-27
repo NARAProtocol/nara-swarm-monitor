@@ -104,6 +104,16 @@ tried sequentially without logging their URLs.
 alerts are rate-limited by `EPOCH_ALERT_REPEAT_SECONDS`, while status changes
 and recovery notify immediately.
 
+`npm run watch:large-buys`
+: Runs the read-only canonical NARA/USDC large-buy watcher. It persists a Base
+block cursor and Telegram delivery records, uses RPC failover, and alerts for
+buys at or above `LARGE_BUY_ALERT_MIN_USDC`. Pass `-- --test-notification` to
+send a labeled routing test without creating a fake buy record.
+
+`npm run test:large-buy-alerts`
+: Runs the focused threshold, canonical-pool, canonical-USDC, delivery-ID,
+message-format, and generated-Hook-ABI compatibility checks.
+
 `npm run scan:failed`
 : Runs one read-only failed transaction scan over active v4 contracts.
 

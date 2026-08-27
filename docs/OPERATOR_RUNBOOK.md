@@ -206,6 +206,26 @@ example secret values remain blank.
 
 ## Safety Rules
 
+### Large NARA buy notifications
+
+When `LARGE_BUY_ALERT_ENABLED=true`, the supervised large-buy watcher polls the
+canonical NARA/USDC Hook independently of the broad ten-minute monitor cycle.
+It notifies Telegram for `PoolFeeTaken` events where `isBuy=true`, the pool and
+input currency match the verified production configuration, and gross input is
+at least `LARGE_BUY_ALERT_MIN_USDC` (100 USDC in production). Each alert shows
+the transaction initiator, gross USDC input, Hook fee, fee BPS, Base block, and
+a BaseScan transaction link.
+
+The watcher is read-only. Its Postgres cursor and unique transaction/log-index
+delivery ID prevent restart replays. It advances the cursor only after every
+qualifying notification in the range succeeds, uses configured RPC failover,
+and never logs provider URLs or Telegram credentials. Test Telegram routing
+without creating a fake buy record with:
+
+```bash
+npm run watch:large-buys -- --test-notification
+```
+
 - No private keys.
 - No transactions.
 - No deploys.

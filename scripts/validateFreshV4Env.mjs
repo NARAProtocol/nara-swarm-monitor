@@ -123,6 +123,26 @@ function assertOptionalIntegerAtLeast(name, minimum, description) {
   }
 }
 
+function assertOptionalBoolean(name) {
+  const value = valueOf(name).toLowerCase();
+  if (value && !["true", "false", "1", "0"].includes(value)) {
+    fail(`${name} must be true or false.`);
+  }
+}
+
+function assertBytes32(name) {
+  const value = valueOf(name);
+  if (!/^0x[a-fA-F0-9]{64}$/.test(value)) fail(`${name} must be a 32-byte hex value.`);
+}
+
+function assertPositiveDecimal(name, maximumDecimals) {
+  const value = valueOf(name);
+  const pattern = new RegExp(`^(0|[1-9]\\d*)(?:\\.(\\d{1,${maximumDecimals}}))?$`);
+  if (!pattern.test(value) || Number(value) <= 0) {
+    fail(`${name} must be greater than zero with at most ${maximumDecimals} decimal places.`);
+  }
+}
+
 function assertOptionalHttpUrl(name) {
   if (!valueOf(name)) return;
   assertHttpUrl(name);
@@ -253,6 +273,7 @@ assertOptionalPositiveInteger("V4_EPOCH_CRITICAL_BACKLOG", "for early critical e
 assertOptionalIntegerAtLeast("EPOCH_SENTINEL_INTERVAL_SECONDS", 60, "for the independent epoch poll interval");
 assertOptionalIntegerAtLeast("EPOCH_ALERT_REPEAT_SECONDS", 60, "for repeated unresolved epoch alerts");
 assertOptionalIntegerAtLeast("MONITOR_CYCLE_INTERVAL_SECONDS", 60, "for the broad monitor cycle interval");
+assertOptionalBoolean("LARGE_BUY_ALERT_ENABLED");
 assertOptionalHttpUrl("BASE_BACKUP_RPC_URL_1");
 assertOptionalHttpUrl("BASE_BACKUP_RPC_URL_2");
 const healthyEpochBacklog = Number(valueOf("V4_MAX_EPOCH_BACKLOG") || "1");
@@ -279,6 +300,20 @@ for (const name of optionalAddresses) {
 if (valueOf("TELEGRAM_BOT_TOKEN")) {
   assertAddress("V4_TREASURY_ADDRESS");
   assertAddress("DEPLOYER_ADDRESS");
+}
+
+const largeBuyAlertEnabled = ["true", "1"].includes(valueOf("LARGE_BUY_ALERT_ENABLED").toLowerCase());
+if (largeBuyAlertEnabled) {
+  assertAddress("V4_USDC_TOKEN");
+  assertBytes32("V4_UNISWAP_V4_POOL_ID");
+  assertPositiveDecimal("LARGE_BUY_ALERT_MIN_USDC", 6);
+  assertPositiveInteger("LARGE_BUY_ALERT_START_BLOCK", "for forward-only alert activation");
+  assertOptionalIntegerAtLeast("LARGE_BUY_ALERT_POLL_SECONDS", 5, "for large-buy polling");
+  assertOptionalIntegerAtLeast("LARGE_BUY_ALERT_CONFIRMATIONS", 1, "for Base confirmation depth");
+  assertOptionalIntegerAtLeast("LARGE_BUY_ALERT_MAX_BLOCKS_PER_SCAN", 1, "for bounded catch-up scans");
+  if (!valueOf("TELEGRAM_BOT_TOKEN") || !valueOf("TELEGRAM_CHAT_ID")) {
+    fail("Telegram credentials are required when LARGE_BUY_ALERT_ENABLED is true.");
+  }
 }
 
 if (monitorProfile === "full") assertAddressList("V4_BASKET_MANAGERS");
