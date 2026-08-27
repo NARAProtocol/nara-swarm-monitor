@@ -7,6 +7,10 @@ import {
   type CommanderReportRow,
 } from "../notifications/notificationRouter";
 import type { NotificationDelivery } from "../notifications/types";
+import {
+  postgresClientConfig,
+  rowsFromPonderSqlResponse,
+} from "./sqlRows";
 
 function sqlEndpoint(): string {
   return (process.env.COMMANDER_SQL_URL || "http://localhost:42069/sql").replace(/\/$/, "");
@@ -23,18 +27,11 @@ async function queryPonderSql(baseUrl: string, sql: string): Promise<Record<stri
     throw new Error(`Ponder SQL query failed (${response.status}): ${await response.text()}`);
   }
   const body = await response.json() as unknown;
-  if (Array.isArray(body)) return body as Record<string, unknown>[];
-  if (body && typeof body === "object" && Array.isArray((body as { rows?: unknown }).rows)) {
-    return (body as { rows: Record<string, unknown>[] }).rows;
-  }
-  if (body && typeof body === "object" && Array.isArray((body as { result?: { rows?: unknown } }).result?.rows)) {
-    return (body as { result: { rows: Record<string, unknown>[] } }).result.rows;
-  }
-  return [];
+  return rowsFromPonderSqlResponse(body);
 }
 
 async function latestCommanderReportRow(): Promise<CommanderReportRow> {
-  const rows = await queryPonderSql(sqlEndpoint(), 'select * from commander_reports order by "createdAt" desc limit 1');
+  const rows = await queryPonderSql(sqlEndpoint(), "select * from commander_reports order by created_at desc limit 1");
   if (rows.length === 0) {
     throw new Error("No commander_reports rows available. Run/store Commander v1 before notifying.");
   }
@@ -45,13 +42,13 @@ async function latestAiSummaryForCommander(commanderReportId: string): Promise<A
   const safeId = escapeSqlLiteral(commanderReportId);
   const rows = await queryPonderSql(
     sqlEndpoint(),
-    `select * from ai_summaries where "commanderReportId" = '${safeId}' order by "createdAt" desc limit 1`,
+    `select * from ai_summaries where commander_report_id = '${safeId}' order by created_at desc limit 1`,
   );
   return rows.length > 0 ? rows[0] as AiSummaryRow : null;
 }
 
 async function recentNotificationDeliveries(): Promise<NotificationDelivery[]> {
-  const rows = await queryPonderSql(sqlEndpoint(), 'select * from notification_deliveries order by "createdAt" desc limit 500');
+  const rows = await queryPonderSql(sqlEndpoint(), "select * from notification_deliveries order by created_at desc limit 500");
   return rows as NotificationDelivery[];
 }
 
@@ -59,14 +56,14 @@ async function storeNotificationDeliveries(deliveries: NotificationDelivery[]): 
   if (!process.env.DATABASE_URL) {
     throw new Error("DATABASE_URL is required to store notification_deliveries.");
   }
-  const client = new pg.Client({ connectionString: process.env.DATABASE_URL });
+  const client = new pg.Client(postgresClientConfig(process.env.DATABASE_URL));
   await client.connect();
   try {
     for (const delivery of deliveries) {
       await client.query(
         `insert into notification_deliveries (
-          id, "chainId", "reportType", "reportId", channel, status, destination,
-          "payloadHash", "errorMessage", "sentAt", "createdAt"
+          id, chain_id, report_type, report_id, channel, status, destination,
+          payload_hash, error_message, sent_at, created_at
         ) values (
           $1, $2, $3, $4, $5, $6, $7,
           $8, $9, $10, $11
@@ -74,9 +71,9 @@ async function storeNotificationDeliveries(deliveries: NotificationDelivery[]): 
         on conflict (id) do update set
           status = excluded.status,
           destination = excluded.destination,
-          "errorMessage" = excluded."errorMessage",
-          "sentAt" = excluded."sentAt",
-          "createdAt" = excluded."createdAt"`,
+          error_message = excluded.error_message,
+          sent_at = excluded.sent_at,
+          created_at = excluded.created_at`,
         [
           delivery.id,
           delivery.chainId,
