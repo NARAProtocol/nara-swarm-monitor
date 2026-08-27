@@ -7,6 +7,7 @@ const envDocs = readFileSync("docs/ENVIRONMENT_VARIABLES.md", "utf8");
 const commandsDocs = readFileSync("docs/COMMANDS.md", "utf8");
 const railwayGuide = readFileSync("docs/RAILWAY_DEPLOYMENT_GUIDE.md", "utf8");
 const telegramSource = readFileSync("scripts/telegramBotListener.mjs", "utf8");
+const startAllSource = readFileSync("scripts/startAll.mjs", "utf8");
 
 const requiredEnvVars = [
   "CHAIN_ID",
@@ -55,6 +56,8 @@ assert.doesNotMatch(telegramSource, /0x[0-9a-fA-F]{40}/, "Telegram listener cont
 assert.match(telegramSource, /requiredAddress\("V4_ENGINE"\)/, "Telegram listener requires the configured Engine");
 assert.match(telegramSource, /safeGetAddress\(process\.env\.V4_POSITION_NFT\)/, "Position NFT remains optional in core profile");
 assert.doesNotMatch(railwayGuide, /V4_POSITION_NFT=0x[0-9a-fA-F]{40}/, "Railway core profile does not publish an unverified NFT address");
+assert.match(startAllSource, /validateFreshV4Env\.mjs/, "production start validates the deployment environment before launching");
+assert.match(startAllSource, /ponder\.kill\("SIGTERM"\)/, "Telegram listener failure stops the parent service");
 
 const cycleDryRun = spawnSync(process.execPath, ["scripts/monitorCycle.mjs", "--dry-run"], {
   encoding: "utf8",

@@ -230,6 +230,11 @@ for (const name of optionalAddresses) {
   assertAddress(name, false);
 }
 
+if (valueOf("TELEGRAM_BOT_TOKEN")) {
+  assertAddress("V4_TREASURY_ADDRESS");
+  assertAddress("DEPLOYER_ADDRESS");
+}
+
 if (monitorProfile === "full") assertAddressList("V4_BASKET_MANAGERS");
 assertNotificationConfig();
 

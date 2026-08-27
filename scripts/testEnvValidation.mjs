@@ -81,6 +81,11 @@ expectFail(runValidation({ V4_NARA_TOKEN: "0xE444de61752bD13D1D37Ee59c31ef4e489b
 expectFail(runValidation({ API_READ_ONLY: "false" }), /API_READ_ONLY/, "write-enabled API flag fails");
 expectFail(runValidation({ NOTIFY_CHANNELS: "webhook", WEBHOOK_URL: "" }), /WEBHOOK_URL/, "webhook channel requires webhook URL");
 expectFail(runValidation({ NOTIFY_CHANNELS: "telegram", TELEGRAM_BOT_TOKEN: "", TELEGRAM_CHAT_ID: "" }), /TELEGRAM_BOT_TOKEN|TELEGRAM_CHAT_ID/, "telegram channel requires token and chat");
+expectFail(
+  runValidation({ TELEGRAM_BOT_TOKEN: "configured", V4_TREASURY_ADDRESS: "", DEPLOYER_ADDRESS: "" }),
+  /V4_TREASURY_ADDRESS|DEPLOYER_ADDRESS/,
+  "Telegram listener requires manifest-backed classification addresses",
+);
 expectFail(runValidation({ BASE_RPC_URL: "not-a-url" }), /BASE_RPC_URL/, "invalid RPC URL fails");
 expectFail(runValidation({ DATABASE_URL: "https://example.com" }), /DATABASE_URL/, "non-Postgres DB URL fails");
 expectFail(runValidation({ V4_BASKET_MANAGERS: "" }), /V4_BASKET_MANAGERS/, "missing basket managers fail");
