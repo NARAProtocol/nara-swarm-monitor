@@ -29,6 +29,8 @@ stops startup instead of silently monitoring the wrong contracts.
 - Interactive Telegram Console Bot (`@naraswarmbot`) with native chat menu (`/wallet`, `/health`, `/whales`, `/cliffs`, `/status`, `/contracts`, `/ping`).
 - Real-time Crypto Alpha Dossier generator decoding on-chain locks, weights, and accruing yield.
 - Routes proactive emergency alerts to Telegram, Discord, console, or generic webhooks.
+- Independently watches the canonical NARA/USDC v4 Hook and notifies Telegram
+  about confirmed buys at or above the configured USDC threshold.
 - Polls engine epoch freshness directly so a stalled keeper is detected before user calls fail.
 - Serves monitoring data through a bounded, read-only API and GraphQL explorer.
 
