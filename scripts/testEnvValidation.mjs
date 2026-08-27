@@ -8,6 +8,7 @@ const baseEnv = {
   MONITOR_PROFILE: "full",
   BASE_RPC_URL: "https://mainnet.base.org",
   DATABASE_URL: "postgres://postgres:postgres@localhost:5432/nara_monitor",
+  DATABASE_SCHEMA: "nara_v4_monitor",
   V4_START_BLOCK: "1",
   V4_EPOCH_LENGTH_SECONDS: "900",
   V4_NARA_TOKEN: "0x1000000000000000000000000000000000000001",
@@ -88,6 +89,8 @@ expectFail(
 );
 expectFail(runValidation({ BASE_RPC_URL: "not-a-url" }), /BASE_RPC_URL/, "invalid RPC URL fails");
 expectFail(runValidation({ DATABASE_URL: "https://example.com" }), /DATABASE_URL/, "non-Postgres DB URL fails");
+expectFail(runValidation({ DATABASE_SCHEMA: "public;drop" }), /DATABASE_SCHEMA/, "invalid database schema fails");
+expectFail(runValidation({ DATABASE_SCHEMA: "pg_catalog" }), /DATABASE_SCHEMA/, "Postgres system schema fails");
 expectFail(runValidation({ V4_BASKET_MANAGERS: "" }), /V4_BASKET_MANAGERS/, "missing basket managers fail");
 expectFail(
   runValidation({ V4_BASKET_MANAGERS: "0xE444de61752bD13D1D37Ee59c31ef4e489bd727C" }),

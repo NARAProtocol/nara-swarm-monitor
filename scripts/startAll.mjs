@@ -1,4 +1,5 @@
 import { spawn, spawnSync } from "node:child_process";
+import { resolve } from "node:path";
 
 console.log("🚀 Starting NARA Swarm Monitor, Telegram Console & Autonomous Scheduler...");
 
@@ -10,20 +11,25 @@ if (validation.status !== 0) {
   process.exit(validation.status ?? 1);
 }
 
+const databaseSchema = process.env.DATABASE_SCHEMA.trim();
+const runtimeEnv = {
+  ...process.env,
+  PGOPTIONS: `-c search_path=${databaseSchema}`,
+};
+
 // 1. Start Ponder indexer
-const ponder = spawn("npx", ["ponder", "start", "--schema", "public"], {
+const ponderCli = resolve("node_modules/ponder/dist/esm/bin/ponder.js");
+const ponder = spawn(process.execPath, [ponderCli, "start", "--schema", databaseSchema], {
   stdio: "inherit",
-  shell: true,
-  env: process.env,
+  env: runtimeEnv,
 });
 
 // 2. Start Telegram Bot listener if TELEGRAM_BOT_TOKEN is set
 if (process.env.TELEGRAM_BOT_TOKEN) {
   console.log("🤖 Starting Telegram interactive listener in background...");
-  const bot = spawn("node", ["scripts/telegramBotListener.mjs"], {
+  const bot = spawn(process.execPath, ["scripts/telegramBotListener.mjs"], {
     stdio: "inherit",
-    shell: true,
-    env: process.env,
+    env: runtimeEnv,
   });
 
   bot.on("exit", (code) => {
@@ -39,10 +45,9 @@ console.log(`⏱️ Autonomous Swarm Monitor Cycle scheduled every ${intervalSec
 
 function runMonitorCycle() {
   console.log(`\n🔄 [${new Date().toISOString()}] Executing Autonomous Swarm Cycle...`);
-  const cycle = spawn("node", ["scripts/monitorCycle.mjs"], {
+  const cycle = spawn(process.execPath, ["scripts/monitorCycle.mjs"], {
     stdio: "inherit",
-    shell: true,
-    env: process.env,
+    env: runtimeEnv,
   });
 
   cycle.on("exit", (code) => {

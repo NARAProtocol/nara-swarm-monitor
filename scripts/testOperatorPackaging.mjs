@@ -13,6 +13,7 @@ const requiredEnvVars = [
   "CHAIN_ID",
   "BASE_RPC_URL",
   "DATABASE_URL",
+  "DATABASE_SCHEMA",
   "V4_START_BLOCK",
   "V4_EPOCH_LENGTH_SECONDS",
   "NARA_WORKSPACE_ROOT",
@@ -57,6 +58,9 @@ assert.match(telegramSource, /requiredAddress\("V4_ENGINE"\)/, "Telegram listene
 assert.match(telegramSource, /safeGetAddress\(process\.env\.V4_POSITION_NFT\)/, "Position NFT remains optional in core profile");
 assert.doesNotMatch(railwayGuide, /V4_POSITION_NFT=0x[0-9a-fA-F]{40}/, "Railway core profile does not publish an unverified NFT address");
 assert.match(startAllSource, /validateFreshV4Env\.mjs/, "production start validates the deployment environment before launching");
+assert.match(startAllSource, /process\.env\.DATABASE_SCHEMA/, "production start uses the configured database schema");
+assert.doesNotMatch(startAllSource, /--schema", "public"/, "production start does not hardcode the shared public schema");
+assert.doesNotMatch(startAllSource, /shell:\s*true/, "production child processes do not use shell execution");
 assert.match(startAllSource, /ponder\.kill\("SIGTERM"\)/, "Telegram listener failure stops the parent service");
 
 const cycleDryRun = spawnSync(process.execPath, ["scripts/monitorCycle.mjs", "--dry-run"], {

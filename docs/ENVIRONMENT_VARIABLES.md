@@ -24,6 +24,11 @@ print key names and whether a key is present.
 `DATABASE_URL`
 : Postgres database used by Ponder and runtime storage scripts.
 
+`DATABASE_SCHEMA`
+: Dedicated PostgreSQL schema owned by this Ponder app. Use
+  `nara_v4_monitor` for the production monitor; do not reuse `public` when it
+  contains another Ponder app.
+
 `V4_START_BLOCK`
 : Fresh v4 deployment start block. Must be a positive integer.
 
