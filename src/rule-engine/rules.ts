@@ -67,9 +67,9 @@ export const ALERT_RULES = [
   },
   {
     ruleId: "epoch_backlog_above_jit_limit",
-    severity: 4,
+    severity: 5,
     title: "Epoch backlog exceeds JIT limit",
-    description: "More than eight epochs are stale, so user mutations require independent synchronization.",
+    description: "More than eight epochs are stale, so user mutations revert until an independent maintainer synchronizes the engine.",
     fingerprintStrategy: "ruleId:chainId",
     evidenceFields: ["backlog", "thresholdValue", "blockNumber"],
     resolutionCondition: "Resolve when backlog is eight or fewer.",

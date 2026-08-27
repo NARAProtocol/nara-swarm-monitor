@@ -42,6 +42,20 @@ function assertNoProcessEnvLogging() {
   }
 }
 
+function assertNoSecretFallbacks() {
+  const secretEnvRegex = /process\.env\.(TELEGRAM_BOT_TOKEN|PRIVATE_KEY|GEMINI_API_KEY|WEBHOOK_URL|DISCORD_WEBHOOK_URL|OZ_MONITOR_WEBHOOK_URL)\b\s*(\?\.\w+\(\))?\s*(?:\|\||\?\?)\s*["'`][^"'`]+["'`]/i;
+  for (const file of scannedRoots.flatMap(listFiles)) {
+    const lines = readFileSync(file, "utf8").split(/\r?\n/);
+    for (const [index, line] of lines.entries()) {
+      assert.equal(
+        secretEnvRegex.test(line),
+        false,
+        `${file}:${index + 1} must not contain fallback literals for secret environment variables`,
+      );
+    }
+  }
+}
+
 function envExampleValue(key) {
   const text = readFileSync(".env.example", "utf8");
   const line = text.split(/\r?\n/).find((entry) => entry.startsWith(`${key}=`));
@@ -77,6 +91,9 @@ function assertTrackedFilesSafe() {
     /github_pat_[A-Za-z0-9_]{20,}/,
     /AKIA[0-9A-Z]{16}/,
     /xox[baprs]-[A-Za-z0-9-]{10,}/,
+    /\b\d{8,11}:[A-Za-z0-9_-]{35}\b/,
+    /AIza[0-9A-Za-z-_]{35}/,
+    /sk-[A-Za-z0-9_-]{20,}/,
   ];
 
   for (const file of files) {
@@ -138,6 +155,7 @@ const validEnv = {
 };
 
 assertNoProcessEnvLogging();
+assertNoSecretFallbacks();
 assertSecretExamplesBlank();
 assertTrackedFilesSafe();
 

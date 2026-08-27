@@ -1,5 +1,6 @@
-// Generated from active v4 Hardhat artifacts. Do not edit by hand.
-// Source: ../nara-protocol-hardhat/artifacts/contracts/v4/NARABondDepositoryV4NFT.sol/NARABondDepositoryV4NFT.json
+// Generated from a pinned merged NARA v4 Hardhat release. Do not edit by hand.
+// Origin commit: 51d51dcad4f4d463d294dd74e0f49ca9de6bcc03
+// Source artifact: artifacts/contracts/v4/NARABondDepositoryV4NFT.sol/NARABondDepositoryV4NFT.json
 export const NARABondDepositoryV4NFTAbi = [
   {
     "inputs": [
@@ -143,33 +144,6 @@ export const NARABondDepositoryV4NFTAbi = [
   {
     "inputs": [],
     "name": "DepositTooSmall",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "ECDSAInvalidSignature",
-    "type": "error"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "length",
-        "type": "uint256"
-      }
-    ],
-    "name": "ECDSAInvalidSignatureLength",
-    "type": "error"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "bytes32",
-        "name": "s",
-        "type": "bytes32"
-      }
-    ],
-    "name": "ECDSAInvalidSignatureS",
     "type": "error"
   },
   {

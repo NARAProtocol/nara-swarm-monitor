@@ -5,6 +5,8 @@ import { spawnSync } from "node:child_process";
 const packageJson = JSON.parse(readFileSync("package.json", "utf8"));
 const envDocs = readFileSync("docs/ENVIRONMENT_VARIABLES.md", "utf8");
 const commandsDocs = readFileSync("docs/COMMANDS.md", "utf8");
+const railwayGuide = readFileSync("docs/RAILWAY_DEPLOYMENT_GUIDE.md", "utf8");
+const telegramSource = readFileSync("scripts/telegramBotListener.mjs", "utf8");
 
 const requiredEnvVars = [
   "CHAIN_ID",
@@ -48,6 +50,11 @@ for (const envVar of requiredEnvVars) {
 for (const scriptName of Object.keys(packageJson.scripts)) {
   assert.match(commandsDocs, new RegExp(`npm run ${scriptName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`), `COMMANDS.md documents npm run ${scriptName}`);
 }
+
+assert.doesNotMatch(telegramSource, /0x[0-9a-fA-F]{40}/, "Telegram listener contains no hardcoded contract address");
+assert.match(telegramSource, /requiredAddress\("V4_ENGINE"\)/, "Telegram listener requires the configured Engine");
+assert.match(telegramSource, /safeGetAddress\(process\.env\.V4_POSITION_NFT\)/, "Position NFT remains optional in core profile");
+assert.doesNotMatch(railwayGuide, /V4_POSITION_NFT=0x[0-9a-fA-F]{40}/, "Railway core profile does not publish an unverified NFT address");
 
 const cycleDryRun = spawnSync(process.execPath, ["scripts/monitorCycle.mjs", "--dry-run"], {
   encoding: "utf8",

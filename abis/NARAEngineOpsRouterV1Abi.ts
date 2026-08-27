@@ -1,5 +1,6 @@
-// Generated from active v4 Hardhat artifacts. Do not edit by hand.
-// Source: ../nara-protocol-hardhat/artifacts/contracts/v4/router/NARAEngineOpsRouterV1.sol/NARAEngineOpsRouterV1.json
+// Generated from a pinned merged NARA v4 Hardhat release. Do not edit by hand.
+// Origin commit: 51d51dcad4f4d463d294dd74e0f49ca9de6bcc03
+// Source artifact: artifacts/contracts/v4/router/NARAEngineOpsRouterV1.sol/NARAEngineOpsRouterV1.json
 export const NARAEngineOpsRouterV1Abi = [
   {
     "inputs": [

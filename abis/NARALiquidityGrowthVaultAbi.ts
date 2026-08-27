@@ -1,5 +1,6 @@
-// Generated from active v4 Hardhat artifacts. Do not edit by hand.
-// Source: ../nara-protocol-hardhat/artifacts/contracts/v4/NARALiquidityGrowthVault.sol/NARALiquidityGrowthVault.json
+// Generated from a pinned merged NARA v4 Hardhat release. Do not edit by hand.
+// Origin commit: 51d51dcad4f4d463d294dd74e0f49ca9de6bcc03
+// Source artifact: artifacts/contracts/v4/NARALiquidityGrowthVault.sol/NARALiquidityGrowthVault.json
 export const NARALiquidityGrowthVaultAbi = [
   {
     "inputs": [
@@ -44,6 +45,16 @@ export const NARALiquidityGrowthVaultAbi = [
   },
   {
     "inputs": [],
+    "name": "EngineTokenRoutingDisabled",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "GenesisRewardDistributorFrozenErr",
+    "type": "error"
+  },
+  {
+    "inputs": [],
     "name": "InsufficientBalance",
     "type": "error"
   },
@@ -55,6 +66,11 @@ export const NARALiquidityGrowthVaultAbi = [
   {
     "inputs": [],
     "name": "InvalidToken",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "NoPendingTarget",
     "type": "error"
   },
   {
@@ -103,6 +119,11 @@ export const NARALiquidityGrowthVaultAbi = [
   {
     "inputs": [],
     "name": "SlippageExceeded",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "TargetUpdateNotReady",
     "type": "error"
   },
   {
@@ -215,6 +236,38 @@ export const NARALiquidityGrowthVaultAbi = [
         "type": "address"
       }
     ],
+    "name": "CompounderProposalCancelled",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "compounder",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint48",
+        "name": "eta",
+        "type": "uint48"
+      }
+    ],
+    "name": "CompounderProposed",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "compounder",
+        "type": "address"
+      }
+    ],
     "name": "CompounderSet",
     "type": "event"
   },
@@ -229,6 +282,51 @@ export const NARALiquidityGrowthVaultAbi = [
       }
     ],
     "name": "EngineSet",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "distributor",
+        "type": "address"
+      }
+    ],
+    "name": "GenesisRewardDistributorFrozen",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "distributor",
+        "type": "address"
+      }
+    ],
+    "name": "GenesisRewardDistributorProposalCancelled",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "distributor",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint48",
+        "name": "eta",
+        "type": "uint48"
+      }
+    ],
+    "name": "GenesisRewardDistributorProposed",
     "type": "event"
   },
   {
@@ -311,6 +409,25 @@ export const NARALiquidityGrowthVaultAbi = [
       }
     ],
     "name": "KeeperBountySet",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "previousOwner",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "newOwner",
+        "type": "address"
+      }
+    ],
+    "name": "OwnershipTransferStarted",
     "type": "event"
   },
   {
@@ -523,6 +640,26 @@ export const NARALiquidityGrowthVaultAbi = [
   },
   {
     "inputs": [],
+    "name": "TARGET_UPDATE_DELAY",
+    "outputs": [
+      {
+        "internalType": "uint48",
+        "name": "",
+        "type": "uint48"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "acceptOwnership",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
     "name": "balances",
     "outputs": [
       {
@@ -550,6 +687,20 @@ export const NARALiquidityGrowthVaultAbi = [
       }
     ],
     "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "cancelCompounderProposal",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "cancelGenesisRewardDistributorProposal",
+    "outputs": [],
+    "stateMutability": "nonpayable",
     "type": "function"
   },
   {
@@ -680,7 +831,28 @@ export const NARALiquidityGrowthVaultAbi = [
   },
   {
     "inputs": [],
+    "name": "executeCompounder",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "executeGenesisRewardDistributor",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
     "name": "freezeCompounder",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "freezeGenesisRewardDistributor",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -693,6 +865,19 @@ export const NARALiquidityGrowthVaultAbi = [
         "internalType": "address",
         "name": "",
         "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "genesisRewardDistributorFrozen",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
       }
     ],
     "stateMutability": "view",
@@ -740,6 +925,65 @@ export const NARALiquidityGrowthVaultAbi = [
   {
     "inputs": [],
     "name": "owner",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "pendingCompounder",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "target",
+        "type": "address"
+      },
+      {
+        "internalType": "uint48",
+        "name": "eta",
+        "type": "uint48"
+      },
+      {
+        "internalType": "bool",
+        "name": "exists",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "pendingGenesisRewardDistributor",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "target",
+        "type": "address"
+      },
+      {
+        "internalType": "uint48",
+        "name": "eta",
+        "type": "uint48"
+      },
+      {
+        "internalType": "bool",
+        "name": "exists",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "pendingOwner",
     "outputs": [
       {
         "internalType": "address",
@@ -840,6 +1084,32 @@ export const NARALiquidityGrowthVaultAbi = [
         "type": "uint256"
       }
     ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "compounder_",
+        "type": "address"
+      }
+    ],
+    "name": "proposeCompounder",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "distributor_",
+        "type": "address"
+      }
+    ],
+    "name": "proposeGenesisRewardDistributor",
+    "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
   },

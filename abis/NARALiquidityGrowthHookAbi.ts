@@ -1,5 +1,6 @@
-// Generated from active v4 Hardhat artifacts. Do not edit by hand.
-// Source: ../nara-protocol-hardhat/artifacts/contracts/v4/NARALiquidityGrowthHook.sol/NARALiquidityGrowthHook.json
+// Generated from a pinned merged NARA v4 Hardhat release. Do not edit by hand.
+// Origin commit: 51d51dcad4f4d463d294dd74e0f49ca9de6bcc03
+// Source artifact: artifacts/contracts/v4/NARALiquidityGrowthHook.sol/NARALiquidityGrowthHook.json
 export const NARALiquidityGrowthHookAbi = [
   {
     "inputs": [
@@ -34,6 +35,11 @@ export const NARALiquidityGrowthHookAbi = [
   },
   {
     "inputs": [],
+    "name": "ActiveFlowBlock",
+    "type": "error"
+  },
+  {
+    "inputs": [],
     "name": "AmountTooLarge",
     "type": "error"
   },
@@ -55,6 +61,27 @@ export const NARALiquidityGrowthHookAbi = [
   {
     "inputs": [],
     "name": "InvalidCurve",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint160",
+        "name": "expected",
+        "type": "uint160"
+      },
+      {
+        "internalType": "uint160",
+        "name": "actual",
+        "type": "uint160"
+      }
+    ],
+    "name": "InvalidInitializationPrice",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "InvalidPoolConfig",
     "type": "error"
   },
   {
@@ -116,8 +143,31 @@ export const NARALiquidityGrowthHookAbi = [
   },
   {
     "inputs": [],
+    "name": "VaultBindingMismatch",
+    "type": "error"
+  },
+  {
+    "inputs": [],
     "name": "ZeroAddress",
     "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "ZeroInitializationPrice",
+    "type": "error"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "bool",
+        "name": "isBuyCurve",
+        "type": "bool"
+      }
+    ],
+    "name": "FeeCurveCancelled",
+    "type": "event"
   },
   {
     "anonymous": false,
@@ -252,6 +302,44 @@ export const NARALiquidityGrowthHookAbi = [
     "inputs": [
       {
         "indexed": true,
+        "internalType": "PoolId",
+        "name": "poolId",
+        "type": "bytes32"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint160",
+        "name": "expectedSqrtPriceX96",
+        "type": "uint160"
+      }
+    ],
+    "name": "InitializationPriceBound",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "previousOwner",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "newOwner",
+        "type": "address"
+      }
+    ],
+    "name": "OwnershipTransferStarted",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
         "internalType": "address",
         "name": "previousOwner",
         "type": "address"
@@ -264,49 +352,6 @@ export const NARALiquidityGrowthHookAbi = [
       }
     ],
     "name": "OwnershipTransferred",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "PoolId",
-        "name": "poolId",
-        "type": "bytes32"
-      },
-      {
-        "indexed": true,
-        "internalType": "address",
-        "name": "sender",
-        "type": "address"
-      },
-      {
-        "indexed": true,
-        "internalType": "address",
-        "name": "currency",
-        "type": "address"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "amount",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint16",
-        "name": "feeBps",
-        "type": "uint16"
-      },
-      {
-        "indexed": false,
-        "internalType": "bool",
-        "name": "isBuy",
-        "type": "bool"
-      }
-    ],
-    "name": "PoolFeeRecordFailed",
     "type": "event"
   },
   {
@@ -403,6 +448,19 @@ export const NARALiquidityGrowthHookAbi = [
         "internalType": "address",
         "name": "currency",
         "type": "address"
+      }
+    ],
+    "name": "ProtocolDepthCancelled",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "currency",
+        "type": "address"
       },
       {
         "indexed": false,
@@ -454,6 +512,32 @@ export const NARALiquidityGrowthHookAbi = [
   },
   {
     "inputs": [],
+    "name": "CANONICAL_POOL_FEE",
+    "outputs": [
+      {
+        "internalType": "uint24",
+        "name": "",
+        "type": "uint24"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "CANONICAL_TICK_SPACING",
+    "outputs": [
+      {
+        "internalType": "int24",
+        "name": "",
+        "type": "int24"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
     "name": "FEE_UPDATE_DELAY",
     "outputs": [
       {
@@ -489,6 +573,13 @@ export const NARALiquidityGrowthHookAbi = [
       }
     ],
     "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "acceptOwnership",
+    "outputs": [],
+    "stateMutability": "nonpayable",
     "type": "function"
   },
   {
@@ -1347,6 +1438,32 @@ export const NARALiquidityGrowthHookAbi = [
         "type": "bool"
       }
     ],
+    "name": "cancelFeeCurve",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "currency",
+        "type": "address"
+      }
+    ],
+    "name": "cancelProtocolDepth",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bool",
+        "name": "isBuyCurve",
+        "type": "bool"
+      }
+    ],
     "name": "executeFeeCurve",
     "outputs": [],
     "stateMutability": "nonpayable",
@@ -1363,6 +1480,19 @@ export const NARALiquidityGrowthHookAbi = [
     "name": "executeProtocolDepth",
     "outputs": [],
     "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "expectedSqrtPriceX96",
+    "outputs": [
+      {
+        "internalType": "uint160",
+        "name": "",
+        "type": "uint160"
+      }
+    ],
+    "stateMutability": "view",
     "type": "function"
   },
   {
@@ -1397,6 +1527,25 @@ export const NARALiquidityGrowthHookAbi = [
       {
         "internalType": "uint256",
         "name": "blockNumber",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "currency",
+        "type": "address"
+      }
+    ],
+    "name": "flowDepthInBlock",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "depth",
         "type": "uint256"
       }
     ],
@@ -1586,6 +1735,19 @@ export const NARALiquidityGrowthHookAbi = [
     "type": "function"
   },
   {
+    "inputs": [],
+    "name": "pendingOwner",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
     "inputs": [
       {
         "internalType": "address",
@@ -1760,7 +1922,41 @@ export const NARALiquidityGrowthHookAbi = [
     "outputs": [
       {
         "internalType": "uint16",
-        "name": "feeBps",
+        "name": "marginalFeeBps",
+        "type": "uint16"
+      },
+      {
+        "internalType": "uint256",
+        "name": "feeAmount",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bool",
+        "name": "isBuy",
+        "type": "bool"
+      },
+      {
+        "internalType": "uint256",
+        "name": "amountIn",
+        "type": "uint256"
+      }
+    ],
+    "name": "quotePoolFeeDetailed",
+    "outputs": [
+      {
+        "internalType": "uint16",
+        "name": "marginalFeeBps",
+        "type": "uint16"
+      },
+      {
+        "internalType": "uint16",
+        "name": "effectiveFeeBps",
         "type": "uint16"
       },
       {
@@ -1805,6 +2001,11 @@ export const NARALiquidityGrowthHookAbi = [
         "internalType": "struct PoolKey",
         "name": "key",
         "type": "tuple"
+      },
+      {
+        "internalType": "uint160",
+        "name": "expectedSqrtPriceX96_",
+        "type": "uint160"
       }
     ],
     "name": "registerPool",

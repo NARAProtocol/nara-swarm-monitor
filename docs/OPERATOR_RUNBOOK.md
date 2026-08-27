@@ -61,7 +61,18 @@ It also requires `CHAIN_ID`, `BASE_RPC_URL`, `DATABASE_URL`,
 addresses when present, refuses `API_READ_ONLY=false`, and checks notification
 channel prerequisites without printing secret values.
 
-### Step 3: Run Ponder Indexer
+### Step 3: Check Engine Epoch Health
+
+```bash
+npm run check:epoch-health
+```
+
+This reads the current and settled engine epochs at one Base block and routes a
+deterministic GREEN, YELLOW, or RED notification. A backlog above eight is RED
+because user mutations cannot settle it through the engine's JIT path. The
+check never creates a signer or sends a transaction.
+
+### Step 4: Run Ponder Indexer
 
 Development:
 
@@ -79,7 +90,7 @@ The Ponder server also exposes the read-only GraphQL and SQL API from
 `src/api/index.ts`. Keep it local by default and place any external access
 behind an operator-controlled reverse proxy.
 
-### Step 4: Run Failed Transaction Scan
+### Step 5: Run Failed Transaction Scan
 
 ```bash
 npm run scan:failed
@@ -88,7 +99,7 @@ npm run scan:failed
 This scans receipts for reverted transactions touching active v4 contract
 addresses. It is read-only and does not submit transactions.
 
-### Step 5: Generate Commander Report
+### Step 6: Generate Commander Report
 
 ```bash
 npm run commander
@@ -97,7 +108,7 @@ npm run commander
 Commander v1 reads existing monitor views and alerts, then creates a
 deterministic status report. It does not call contracts or raw chain state.
 
-### Step 6: Generate AI Summary
+### Step 7: Generate AI Summary
 
 ```bash
 npm run summarize
@@ -106,7 +117,7 @@ npm run summarize
 The default provider is `AI_SUMMARY_PROVIDER=local_stub`, which makes no
 external API call. It reads only `commander_reports`.
 
-### Step 7: Send Notifications
+### Step 8: Send Notifications
 
 ```bash
 npm run notify
@@ -116,7 +127,7 @@ Notifications report Commander or AI summary output only. They do not resolve
 alerts, create alerts, send transactions, or post publicly unless the operator
 has explicitly enabled a channel.
 
-### Step 8: Start Read-Only API/Dashboard
+### Step 9: Start Read-Only API/Dashboard
 
 ```bash
 npm run api
@@ -139,6 +150,7 @@ The cycle runs:
 
 ```text
 validate:v4-env
+check:epoch-health
 scan:failed
 commander
 summarize

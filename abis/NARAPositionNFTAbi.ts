@@ -1,5 +1,6 @@
-// Generated from active v4 Hardhat artifacts. Do not edit by hand.
-// Source: ../nara-protocol-hardhat/artifacts/contracts/v4/NARAPositionNFTV4.sol/NARAPositionNFTV4.json
+// Generated from a pinned merged NARA v4 Hardhat release. Do not edit by hand.
+// Origin commit: 51d51dcad4f4d463d294dd74e0f49ca9de6bcc03
+// Source artifact: artifacts/contracts/v4/NARAPositionNFTV4.sol/NARAPositionNFTV4.json
 export const NARAPositionNFTAbi = [
   {
     "inputs": [
@@ -325,6 +326,11 @@ export const NARAPositionNFTAbi = [
   {
     "inputs": [],
     "name": "NARAPositionNFTV4__PositionNotMatured",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "NARAPositionNFTV4__RendererFrozen",
     "type": "error"
   },
   {
@@ -966,6 +972,25 @@ export const NARAPositionNFTAbi = [
   {
     "anonymous": false,
     "inputs": [],
+    "name": "RendererFrozen",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "renderer",
+        "type": "address"
+      }
+    ],
+    "name": "RendererSet",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [],
     "name": "RoyaltiesFrozen",
     "type": "event"
   },
@@ -1451,6 +1476,13 @@ export const NARAPositionNFTAbi = [
   {
     "inputs": [],
     "name": "freezeGenesisMinters",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "freezeRenderer",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -2082,6 +2114,19 @@ export const NARAPositionNFTAbi = [
   },
   {
     "inputs": [],
+    "name": "rendererFrozen",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
     "name": "renounceOwnership",
     "outputs": [],
     "stateMutability": "nonpayable",
@@ -2274,6 +2319,19 @@ export const NARAPositionNFTAbi = [
       }
     ],
     "name": "setGenesisRewardDistributor",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "newRenderer",
+        "type": "address"
+      }
+    ],
+    "name": "setRenderer",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"

@@ -40,7 +40,6 @@ export const NARALiquidityGrowthHookAbi = parseAbi([
   "event ProtocolDepthSet(address indexed currency,uint256 depth)",
   "event ProtocolDepthProposed(address indexed currency,uint256 depth,uint48 eta)",
   "event PoolFeeTaken(bytes32 indexed poolId,address indexed sender,address indexed currency,uint256 amountIn,uint256 feeAmount,uint16 feeBps,bool isBuy)",
-  "event PoolFeeRecordFailed(bytes32 indexed poolId,address indexed sender,address indexed currency,uint256 amount,uint16 feeBps,bool isBuy)",
   "event FeeCurveSet(bool indexed isBuyCurve,(uint32 mediumPressureBps,uint32 highPressureBps,uint32 extremePressureBps,uint16 baseFeeBps,uint16 mediumFeeBps,uint16 highFeeBps,uint16 extremeFeeBps,uint16 maxFeeBps) curve)",
   "event FeeCurveProposed(bool indexed isBuyCurve,(uint32 mediumPressureBps,uint32 highPressureBps,uint32 extremePressureBps,uint16 baseFeeBps,uint16 mediumFeeBps,uint16 highFeeBps,uint16 extremeFeeBps,uint16 maxFeeBps) curve,uint48 eta)",
 ]);
@@ -84,10 +83,10 @@ export const NARABasketManagerAbi = parseAbi([
 ]);
 
 export const NARABasketFeeCollectorAbi = parseAbi([
-  "event AllowedExecutorSet(address indexed executor,bool allowed)",
-  "event AllowedSelectorSet(address indexed executor,bytes4 indexed selector,bool allowed)",
-  "event AllowlistFrozenSet()",
-  "event SwapExecuted(address indexed executor,address indexed tokenIn,address indexed tokenOut,uint256 amountInMax,uint256 amountInActual,uint256 amountOutActual)",
+  "event RouteProposed(address indexed router,address indexed usdcUsdFeed,address indexed ethUsdFeed,uint24 poolFee,uint48 eta)",
+  "event RouteExecuted(address indexed router,address indexed usdcUsdFeed,address indexed ethUsdFeed,uint24 poolFee)",
+  "event RouteCancelled()",
+  "event UsdcConvertedAndNotified(address indexed router,uint256 usdcAmountIn,uint256 minimumWethOut,uint256 actualWethOut)",
   "event NaraRewardsDeposited(uint256 amount)",
   "event EthRewardsNotified(uint256 amount)",
 ]);

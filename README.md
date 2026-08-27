@@ -19,13 +19,17 @@ stops startup instead of silently monitoring the wrong contracts.
 
 ## What It Does
 
-- Indexes the active NARA token, engine, liquidity hook, vault, and compounder.
-- Builds deterministic protocol, wallet, position, treasury, and admin views.
-- Evaluates evidence-backed alert rules with deduplication.
+- Indexes the active NARA token, engine, liquidity hook, vault, and compounder on Base.
+- Builds deterministic protocol, wallet, position, treasury, and admin views in PostgreSQL.
+- Evaluates evidence-backed alert rules with deduplication and severity 1–5 scoring.
 - Scans reverted transactions involving monitored contracts.
 - Produces structured Commander reports and deterministic AI summaries.
-- Routes notifications to console, Discord, Telegram, or generic webhooks.
-- Serves monitoring data through a bounded, read-only API.
+- Autonomous 10-minute background diagnostic heartbeat executing continuous sentinel cycles.
+- Interactive Telegram Console Bot (`@naraswarmbot`) with native chat menu (`/wallet`, `/health`, `/whales`, `/cliffs`, `/status`, `/contracts`, `/ping`).
+- Real-time Crypto Alpha Dossier generator decoding on-chain locks, weights, and accruing yield.
+- Routes proactive emergency alerts to Telegram, Discord, console, or generic webhooks.
+- Polls engine epoch freshness directly so a stalled keeper is detected before user calls fail.
+- Serves monitoring data through a bounded, read-only API and GraphQL explorer.
 
 ## Architecture
 

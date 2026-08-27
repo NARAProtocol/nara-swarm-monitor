@@ -104,6 +104,7 @@ async function ensureWalletScore(db: any, walletAddress: string, timestamp: numb
   if (wallet === ZERO_ADDRESS) return;
 
   await db.insert(wallet_position_scores).values({
+    id: `${chainId}-${wallet}`,
     wallet,
     chainId,
     rawPositionCount: 0,
@@ -177,6 +178,7 @@ async function updateWalletScore(db: any, walletAddress: string, timestamp: numb
   const convictionScore = delta.convictionScore ?? 0n;
 
   await db.insert(wallet_position_scores).values({
+    id: `${chainId}-${wallet}`,
     wallet,
     chainId,
     rawPositionCount,
@@ -758,8 +760,7 @@ ponder.on("NARAToken:Transfer", async ({ event, context }) => {
     suffix: "out",
   });
   const senderScore = await context.db.find(wallet_position_scores, {
-    wallet: normalizeAddress(event.args.from),
-    chainId,
+    id: `${chainId}-${normalizeAddress(event.args.from)}`,
   });
   if (
     senderScore &&

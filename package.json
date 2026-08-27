@@ -5,13 +5,14 @@
   "type": "module",
   "scripts": {
     "dev": "ponder dev",
-    "start": "ponder start",
+    "start": "node scripts/startAll.mjs",
     "db": "ponder db",
     "codegen": "ponder codegen",
     "sync:abis": "node scripts/syncV4AbisFromHardhat.mjs",
     "validate:v4-env": "node scripts/validateFreshV4Env.mjs",
     "validate:env": "node scripts/validateFreshV4Env.mjs",
     "scan:failed": "node scripts/scanFailedTransactions.mjs",
+    "check:epoch-health": "node scripts/checkEpochHealth.mjs",
     "commander": "node scripts/commander.mjs",
     "summarize": "node scripts/summarize.mjs",
     "notify": "node scripts/notify.mjs",
@@ -48,12 +49,12 @@
     "@typescript-eslint/typescript-estree": {
       "minimatch": "9.0.7"
     },
-    "brace-expansion": "5.0.8",
+    "brace-expansion": "5.0.9",
     "drizzle-orm": "0.45.2",
-    "fast-uri": "3.1.4",
+    "fast-uri": "3.1.5",
     "glob": "13.0.6",
     "kysely": "0.28.17",
-    "postcss": "8.5.18",
+    "postcss": "8.5.26",
     "vite": "6.4.3",
     "ws": "8.21.1"
   },

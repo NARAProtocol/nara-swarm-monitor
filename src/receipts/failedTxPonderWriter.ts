@@ -16,6 +16,7 @@ import type {
 
 function emptyWalletScore(delta: FailedWalletRiskDelta) {
   return {
+    id: `${delta.chainId}-${delta.wallet}`,
     wallet: delta.wallet,
     chainId: delta.chainId,
     rawPositionCount: 0,

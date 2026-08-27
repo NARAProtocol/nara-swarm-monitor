@@ -21,7 +21,7 @@ export const REQUIRED_MONITOR_SURFACES = Object.freeze({
   },
   liquidityHook: {
     env: "V4_LIQUIDITY_GROWTH_HOOK",
-    events: ["PoolRegistered", "ProtocolDepthSet", "ProtocolDepthProposed", "PoolFeeTaken", "PoolFeeRecordFailed"],
+    events: ["PoolRegistered", "ProtocolDepthSet", "ProtocolDepthProposed", "PoolFeeTaken"],
   },
   liquidityVault: {
     env: "V4_LIQUIDITY_GROWTH_VAULT",
@@ -37,7 +37,7 @@ export const REQUIRED_MONITOR_SURFACES = Object.freeze({
   },
   basketFeeCollector: {
     env: "V4_BASKET_FEE_COLLECTOR",
-    events: ["AllowedExecutorSet", "AllowedSelectorSet", "AllowlistFrozenSet", "SwapExecuted", "NaraRewardsDeposited", "EthRewardsNotified"],
+    events: ["RouteProposed", "RouteExecuted", "RouteCancelled", "UsdcConvertedAndNotified", "NaraRewardsDeposited", "EthRewardsNotified"],
   },
   genesisRewardDistributor: {
     env: "V4_GENESIS_REWARD_DISTRIBUTOR",
@@ -142,7 +142,7 @@ export function evaluateSurfaceObservation(observation) {
   if (observation.kind === "epoch_backlog" && observation.backlog > 8n) {
     alerts.push({
       ruleId: "epoch_backlog_above_jit_limit",
-      severity: 4,
+      severity: 5,
       fingerprint: String(observation.chainId),
       evidence: { ...evidence, backlog: observation.backlog.toString(), thresholdValue: "8" },
     });

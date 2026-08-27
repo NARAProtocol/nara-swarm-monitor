@@ -1,5 +1,6 @@
-// Generated from active v4 Hardhat artifacts. Do not edit by hand.
-// Source: ../nara-protocol-hardhat/artifacts/contracts/v4/NARALiquidityCompounderV4.sol/NARALiquidityCompounderV4.json
+// Generated from a pinned merged NARA v4 Hardhat release. Do not edit by hand.
+// Origin commit: 51d51dcad4f4d463d294dd74e0f49ca9de6bcc03
+// Source artifact: artifacts/contracts/v4/NARALiquidityCompounderV4.sol/NARALiquidityCompounderV4.json
 export const NARALiquidityCompounderAbi = [
   {
     "inputs": [
@@ -58,6 +59,53 @@ export const NARALiquidityCompounderAbi = [
     "type": "constructor"
   },
   {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "naraUsed",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "usdcUsed",
+        "type": "uint256"
+      }
+    ],
+    "name": "CompoundAmountExceeded",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint160",
+        "name": "currentSqrtPriceX96",
+        "type": "uint160"
+      },
+      {
+        "internalType": "uint160",
+        "name": "minSqrtPriceX96",
+        "type": "uint160"
+      },
+      {
+        "internalType": "uint160",
+        "name": "maxSqrtPriceX96",
+        "type": "uint160"
+      }
+    ],
+    "name": "ExecutionPriceOutOfBounds",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "InvalidCompoundConstraints",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "InvalidPeripheryBinding",
+    "type": "error"
+  },
+  {
     "inputs": [],
     "name": "InvalidRecoveryKind",
     "type": "error"
@@ -112,6 +160,22 @@ export const NARALiquidityCompounderAbi = [
   {
     "inputs": [],
     "name": "ReentrancyGuardReentrantCall",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "imbalanceBps",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "maximumBps",
+        "type": "uint256"
+      }
+    ],
+    "name": "ReferenceValueLossExceeded",
     "type": "error"
   },
   {
@@ -368,6 +432,45 @@ export const NARALiquidityCompounderAbi = [
   },
   {
     "inputs": [],
+    "name": "BPS",
+    "outputs": [
+      {
+        "internalType": "uint16",
+        "name": "",
+        "type": "uint16"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "MAX_REFERENCE_VALUE_IMBALANCE_BPS",
+    "outputs": [
+      {
+        "internalType": "uint16",
+        "name": "",
+        "type": "uint16"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "MAX_SQRT_PRICE_DEVIATION_BPS",
+    "outputs": [
+      {
+        "internalType": "uint16",
+        "name": "",
+        "type": "uint16"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
     "name": "RECOVERY_DELAY",
     "outputs": [
       {
@@ -435,7 +538,7 @@ export const NARALiquidityCompounderAbi = [
       },
       {
         "internalType": "bytes",
-        "name": "",
+        "name": "data",
         "type": "bytes"
       }
     ],
@@ -455,6 +558,19 @@ export const NARALiquidityCompounderAbi = [
     "name": "executeRecovery",
     "outputs": [],
     "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "hooks",
+    "outputs": [
+      {
+        "internalType": "contract IHooks",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
     "type": "function"
   },
   {
@@ -568,6 +684,19 @@ export const NARALiquidityCompounderAbi = [
   },
   {
     "inputs": [],
+    "name": "peripheryBindingsValid",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
     "name": "permit2",
     "outputs": [
       {
@@ -587,6 +716,19 @@ export const NARALiquidityCompounderAbi = [
         "internalType": "uint24",
         "name": "",
         "type": "uint24"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "poolId",
+    "outputs": [
+      {
+        "internalType": "PoolId",
+        "name": "",
+        "type": "bytes32"
       }
     ],
     "stateMutability": "view",
