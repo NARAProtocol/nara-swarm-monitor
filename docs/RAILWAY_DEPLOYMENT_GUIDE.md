@@ -32,6 +32,8 @@ CHAIN_ID=8453
 MONITOR_PROFILE=core
 BASE_RPC_URL=https://base-mainnet.g.alchemy.com/v2/YOUR_KEY
 DATABASE_SCHEMA=nara_v4_monitor
+COMMANDER_SQL_URL=http://127.0.0.1:8080/sql
+API_PORT=8080
 V4_START_BLOCK=49719008
 V4_EPOCH_LENGTH_SECONDS=900
 V4_MAX_EPOCH_BACKLOG=8
@@ -55,6 +57,13 @@ MONITOR_CYCLE_INTERVAL_SECONDS=600
 ```
 
 *(Note: Replace `BASE_RPC_URL`, `TELEGRAM_BOT_TOKEN`, and `TELEGRAM_CHAT_ID` with your own credentials). Keep `DATABASE_SCHEMA` dedicated to this monitor; do not reuse a schema owned by another Ponder app.*
+
+For an existing production schema, a runtime-only deployment may set
+`PONDER_EXPERIMENTAL_DB=platform` only after confirming that
+`ponder.config.ts`, `ponder.schema.ts`, and indexing handlers are unchanged.
+In the pinned Ponder version this permits normal crash recovery across a new
+build ID. Never use it to force a schema or indexing-handler migration; use a
+new dedicated schema and reviewed backfill plan for those changes.
 
 The core profile intentionally leaves `V4_POSITION_NFT` and every other
 deferred surface unset until a verified integration-ready manifest and
