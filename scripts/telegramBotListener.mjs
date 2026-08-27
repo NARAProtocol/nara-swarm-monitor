@@ -3,28 +3,40 @@ import { base } from "viem/chains";
 import pg from "pg";
 
 const botToken = process.env.TELEGRAM_BOT_TOKEN?.trim();
-const rpcUrl = process.env.BASE_RPC_URL?.trim() || "https://mainnet.base.org";
 const dbUrl = process.env.DATABASE_URL?.trim();
-
-function safeGetAddress(raw, fallback) {
-  try {
-    return getAddress((raw || "").trim());
-  } catch {
-    return fallback ? getAddress(fallback) : undefined;
-  }
-}
-
-const engineAddress = safeGetAddress(process.env.V4_ENGINE, "0x98ab6406D6B548F37dEF7110961bb45A399e5aFC");
-const tokenAddress = safeGetAddress(process.env.V4_NARA_TOKEN, "0xB6333F5D4cEd8dffA80F3F13697D6aA3BB3f19c1");
-const nftAddress = safeGetAddress(process.env.V4_POSITION_NFT, "0x5a18aae7F04E646Abe385E8a36214B85E92376E6");
-const hookAddress = safeGetAddress(process.env.V4_LIQUIDITY_GROWTH_HOOK, "0x59AEf9799DEA01A7FB7dA73BEA10dfB08858A088");
-const deployerAddress = "0xAE9D1667B45558232BeD9d45DcCA53940F892aB5".toLowerCase();
-const treasuryAddress = (process.env.V4_TREASURY_ADDRESS || "0xfe3A8678A9c729438BB11718bD1391E7Ab491E8e").toLowerCase();
 
 if (!botToken) {
   console.log("TELEGRAM_BOT_TOKEN not provided. Telegram bot listener will not start.");
   process.exit(0);
 }
+
+function requiredEnv(name) {
+  const value = process.env[name]?.trim();
+  if (!value) throw new Error(`${name} is required when the Telegram listener is enabled.`);
+  return value;
+}
+
+function safeGetAddress(raw) {
+  try {
+    return getAddress((raw || "").trim());
+  } catch {
+    return undefined;
+  }
+}
+
+function requiredAddress(name) {
+  const address = safeGetAddress(process.env[name]);
+  if (!address) throw new Error(`${name} must be a valid address when the Telegram listener is enabled.`);
+  return address;
+}
+
+const rpcUrl = requiredEnv("BASE_RPC_URL");
+const engineAddress = requiredAddress("V4_ENGINE");
+const tokenAddress = requiredAddress("V4_NARA_TOKEN");
+const nftAddress = safeGetAddress(process.env.V4_POSITION_NFT);
+const hookAddress = requiredAddress("V4_LIQUIDITY_GROWTH_HOOK");
+const deployerAddress = requiredAddress("DEPLOYER_ADDRESS").toLowerCase();
+const treasuryAddress = requiredAddress("V4_TREASURY_ADDRESS").toLowerCase();
 
 const client = createPublicClient({
   chain: base,
@@ -166,7 +178,7 @@ async function handleCommand(msg) {
       "━━━━━━━━━━━━━━━━━━━━",
       "• *NARA Token:* `" + tokenAddress + "`",
       "• *NARA Engine:* `" + engineAddress + "`",
-      "• *Position NFT:* `" + nftAddress + "`",
+      nftAddress ? "• *Position NFT:* `" + nftAddress + "`" : "• *Position NFT:* not enabled in core profile",
       "• *Liquidity Hook:* `" + hookAddress + "`",
       "━━━━━━━━━━━━━━━━━━━━"
     ].join("\n");
@@ -311,12 +323,14 @@ async function handleCommand(msg) {
           functionName: "balanceOf",
           args: [checksumTarget],
         }).catch(() => 0n),
-        client.readContract({
-          address: nftAddress,
-          abi: nftAbi,
-          functionName: "balanceOf",
-          args: [checksumTarget],
-        }).catch(() => 0n),
+        nftAddress
+          ? client.readContract({
+              address: nftAddress,
+              abi: nftAbi,
+              functionName: "balanceOf",
+              args: [checksumTarget],
+            }).catch(() => 0n)
+          : Promise.resolve(0n),
         client.readContract({
           address: tokenAddress,
           abi: tokenAbi,

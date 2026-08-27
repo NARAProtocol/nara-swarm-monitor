@@ -51,7 +51,8 @@ retired incident-stack addresses.
 : Fresh active v4 `NARAEngine`.
 
 `V4_POSITION_NFT`
-: Fresh active v4 `NARAPositionNFTV4`.
+: Fresh active v4 `NARAPositionNFTV4`; leave unset in the core profile until an
+  integration-ready manifest and downstream handoff exist.
 
 `V4_BOND_DEPOSITORY_NFT`
 : Fresh active v4 `NARABondDepositoryV4NFT`, the NFT launch-path depository.

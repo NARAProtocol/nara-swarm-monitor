@@ -36,7 +36,6 @@ V4_EPOCH_LENGTH_SECONDS=900
 V4_MAX_EPOCH_BACKLOG=8
 V4_NARA_TOKEN=0xB6333F5D4cEd8dffA80F3F13697D6aA3BB3f19c1
 V4_ENGINE=0x98ab6406D6B548F37dEF7110961bb45A399e5aFC
-V4_POSITION_NFT=0x5a18aae7F04E646Abe385E8a36214B85E92376E6
 V4_LIQUIDITY_GROWTH_HOOK=0x59AEf9799DEA01A7FB7dA73BEA10dfB08858A088
 V4_LIQUIDITY_GROWTH_VAULT=0xD7f7b44BF65EBa3E90fDe0642687ed22A323084D
 V4_LIQUIDITY_COMPOUNDER=0xfeFcc45C0454D022586eaA8a5c51BD25DCe713DF
@@ -54,6 +53,10 @@ MONITOR_CYCLE_INTERVAL_SECONDS=600
 ```
 
 *(Note: Replace `BASE_RPC_URL`, `TELEGRAM_BOT_TOKEN`, and `TELEGRAM_CHAT_ID` with your own credentials).*
+
+The core profile intentionally leaves `V4_POSITION_NFT` and every other
+deferred surface unset until a verified integration-ready manifest and
+downstream handoff explicitly enable that surface.
 
 #### Step 4: Link Telegram Bot
 1. Open Telegram and search for your bot username (or click your bot's link).
