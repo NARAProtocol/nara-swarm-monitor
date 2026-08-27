@@ -38,8 +38,19 @@ deployment config confirms it.
 
 `V4_MAX_EPOCH_BACKLOG`
 : Maximum backlog considered healthy by the direct-state epoch poll. Defaults
-to `1`. A backlog above eight is always RED because it exceeds the engine's
-user-call JIT settlement limit.
+  to `1`. A backlog above eight is always RED because it exceeds the engine's
+  user-call JIT settlement limit.
+
+`FAILED_TX_SCAN_MAX_BLOCKS`
+: Maximum blocks scanned by one recurring failed-transaction pass. Defaults to
+  `512`. The default pass scans the latest bounded window, not the full
+  deployment history.
+
+`FAILED_TX_FROM_BLOCK` / `FAILED_TX_TO_BLOCK`
+: Optional manual scan bounds. The selected range must still fit within
+  `FAILED_TX_SCAN_MAX_BLOCKS`; increase the cap deliberately for an offline
+  historical batch rather than turning recurring monitoring into an unbounded
+  scan.
 
 `COMMANDER_SQL_URL`
 : Read-only Ponder SQL endpoint. Defaults to `http://localhost:42069/sql`.

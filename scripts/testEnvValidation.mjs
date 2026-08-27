@@ -11,6 +11,7 @@ const baseEnv = {
   DATABASE_SCHEMA: "nara_v4_monitor",
   V4_START_BLOCK: "1",
   V4_EPOCH_LENGTH_SECONDS: "900",
+  FAILED_TX_SCAN_MAX_BLOCKS: "512",
   V4_NARA_TOKEN: "0x1000000000000000000000000000000000000001",
   V4_ENGINE: "0x1000000000000000000000000000000000000002",
   V4_POSITION_NFT: "0x1000000000000000000000000000000000000003",
@@ -78,6 +79,7 @@ expectFail(
 expectFail(runValidation({ MONITOR_PROFILE: "invalid" }), /MONITOR_PROFILE/, "unknown monitor profile fails");
 expectFail(runValidation({ V4_EPOCH_LENGTH_SECONDS: "" }), /V4_EPOCH_LENGTH_SECONDS/, "missing epoch length fails");
 expectFail(runValidation({ V4_EPOCH_LENGTH_SECONDS: "0" }), /V4_EPOCH_LENGTH_SECONDS/, "zero epoch length fails");
+expectFail(runValidation({ FAILED_TX_SCAN_MAX_BLOCKS: "0" }), /FAILED_TX_SCAN_MAX_BLOCKS/, "zero failed transaction scan cap fails");
 expectFail(runValidation({ V4_NARA_TOKEN: "0xE444de61752bD13D1D37Ee59c31ef4e489bd727C" }), /retired NARA address/, "retired v3 address fails");
 expectFail(runValidation({ API_READ_ONLY: "false" }), /API_READ_ONLY/, "write-enabled API flag fails");
 expectFail(runValidation({ NOTIFY_CHANNELS: "webhook", WEBHOOK_URL: "" }), /WEBHOOK_URL/, "webhook channel requires webhook URL");
