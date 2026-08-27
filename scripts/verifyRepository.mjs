@@ -18,6 +18,7 @@ const environment = {
     process.env.DATABASE_URL ??
     "postgres://verification:verification@127.0.0.1:5432/nara_monitor_verification",
   DATABASE_SCHEMA: process.env.DATABASE_SCHEMA ?? "nara_v4_monitor",
+  FAILED_TX_SCAN_MAX_BLOCKS: process.env.FAILED_TX_SCAN_MAX_BLOCKS ?? "512",
 };
 
 for (const command of commands) {

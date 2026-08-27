@@ -4,6 +4,10 @@ import {
   scanFailedTransactions,
   serializeForJson,
 } from "./failedTxScannerRuntime.mjs";
+import {
+  DEFAULT_FAILED_TX_SCAN_MAX_BLOCKS,
+  planFailedTxScanRange,
+} from "./failedTxScanRange.mjs";
 
 function requiredEnv(name) {
   const value = process.env[name];
@@ -20,14 +24,16 @@ function parsePositiveBigIntEnv(name) {
 
 const rpcUrl = requiredEnv("BASE_RPC_URL");
 const chainId = Number(process.env.CHAIN_ID || "8453");
-const fromBlock = parsePositiveBigIntEnv("V4_START_BLOCK");
+const deploymentStartBlock = parsePositiveBigIntEnv("V4_START_BLOCK");
 const client = createBaseClient(rpcUrl);
 const latestBlock = await client.getBlockNumber();
-const toBlock = process.env.FAILED_TX_TO_BLOCK ? BigInt(process.env.FAILED_TX_TO_BLOCK) : latestBlock;
-
-if (toBlock < fromBlock) {
-  throw new Error("FAILED_TX_TO_BLOCK/latest block must be greater than or equal to V4_START_BLOCK");
-}
+const { fromBlock, toBlock, maxBlocks } = planFailedTxScanRange({
+  deploymentStartBlock,
+  latestBlock,
+  configuredFromBlock: process.env.FAILED_TX_FROM_BLOCK,
+  configuredToBlock: process.env.FAILED_TX_TO_BLOCK,
+  maxBlocks: process.env.FAILED_TX_SCAN_MAX_BLOCKS || DEFAULT_FAILED_TX_SCAN_MAX_BLOCKS,
+});
 
 const activeContracts = activeContractsFromEnv();
 const result = await scanFailedTransactions({
@@ -35,6 +41,7 @@ const result = await scanFailedTransactions({
   chainId,
   fromBlock,
   toBlock,
+  maxBlocks,
   activeContracts,
   options: {
     approvedOpsRouter: process.env.V4_ENGINE_OPS_ROUTER,
@@ -61,4 +68,3 @@ console.log(serializeForJson({
   failedTxGroups: result.failedTxGroups,
   alerts: result.alerts,
 }));
-

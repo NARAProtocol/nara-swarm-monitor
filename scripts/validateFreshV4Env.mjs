@@ -229,6 +229,7 @@ assertDatabaseUrl("DATABASE_URL");
 assertDatabaseSchema("DATABASE_SCHEMA");
 assertPositiveInteger("V4_START_BLOCK", "from the fresh v4 deployment");
 assertPositiveInteger("V4_EPOCH_LENGTH_SECONDS", "for the deployed engine epoch length");
+assertPositiveInteger("FAILED_TX_SCAN_MAX_BLOCKS", "for bounded recurring receipt scans");
 if (monitorProfile !== "core" && monitorProfile !== "full") {
   fail("MONITOR_PROFILE must be core or full.");
 }
