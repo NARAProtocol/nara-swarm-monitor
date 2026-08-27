@@ -760,8 +760,7 @@ ponder.on("NARAToken:Transfer", async ({ event, context }) => {
     suffix: "out",
   });
   const senderScore = await context.db.find(wallet_position_scores, {
-    wallet: normalizeAddress(event.args.from),
-    chainId,
+    id: `${chainId}-${normalizeAddress(event.args.from)}`,
   });
   if (
     senderScore &&

@@ -55,7 +55,6 @@ ponder.on("NARALiquidityGrowthHook:PoolRegistered", async ({ event, context }) =
 ponder.on("NARALiquidityGrowthHook:ProtocolDepthSet", async ({ event, context }) => record("liquidity_hook", "depth_set", event, context));
 ponder.on("NARALiquidityGrowthHook:ProtocolDepthProposed", async ({ event, context }) => record("liquidity_hook", "depth_proposed", event, context));
 ponder.on("NARALiquidityGrowthHook:PoolFeeTaken", async ({ event, context }) => record("liquidity_hook", "pool_fee", event, context));
-ponder.on("NARALiquidityGrowthHook:PoolFeeRecordFailed", async ({ event, context }) => record("liquidity_hook", "fee_record_failed", event, context));
 ponder.on("NARALiquidityGrowthHook:FeeCurveSet", async ({ event, context }) => record("liquidity_hook", "fee_curve_set", event, context));
 ponder.on("NARALiquidityGrowthHook:FeeCurveProposed", async ({ event, context }) => record("liquidity_hook", "fee_curve_proposed", event, context));
 
@@ -86,10 +85,10 @@ ponder.on("NARABasketManager:HoldingFeeAccrued", async ({ event, context }) => r
 ponder.on("NARABasketManager:ProtocolFeeAccrued", async ({ event, context }) => record("basket_manager", "fee_accrued", event, context));
 ponder.on("NARABasketManager:AccruedFeeSwept", async ({ event, context }) => record("basket_manager", "fee_swept", event, context));
 
-ponder.on("NARABasketFeeCollector:AllowedExecutorSet", async ({ event, context }) => record("basket_fee_collector", "executor_set", event, context));
-ponder.on("NARABasketFeeCollector:AllowedSelectorSet", async ({ event, context }) => record("basket_fee_collector", "selector_set", event, context));
-ponder.on("NARABasketFeeCollector:AllowlistFrozenSet", async ({ event, context }) => record("basket_fee_collector", "allowlist_frozen", event, context));
-ponder.on("NARABasketFeeCollector:SwapExecuted", async ({ event, context }) => record("basket_fee_collector", "swap", event, context));
+ponder.on("NARABasketFeeCollector:RouteProposed", async ({ event, context }) => record("basket_fee_collector", "route_proposed", event, context));
+ponder.on("NARABasketFeeCollector:RouteExecuted", async ({ event, context }) => record("basket_fee_collector", "route_executed", event, context));
+ponder.on("NARABasketFeeCollector:RouteCancelled", async ({ event, context }) => record("basket_fee_collector", "route_cancelled", event, context));
+ponder.on("NARABasketFeeCollector:UsdcConvertedAndNotified", async ({ event, context }) => record("basket_fee_collector", "usdc_converted", event, context));
 ponder.on("NARABasketFeeCollector:NaraRewardsDeposited", async ({ event, context }) => record("basket_fee_collector", "nara_rewards", event, context));
 ponder.on("NARABasketFeeCollector:EthRewardsNotified", async ({ event, context }) => record("basket_fee_collector", "eth_rewards", event, context));
 

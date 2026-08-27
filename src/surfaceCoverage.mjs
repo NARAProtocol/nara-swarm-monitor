@@ -21,7 +21,7 @@ export const REQUIRED_MONITOR_SURFACES = Object.freeze({
   },
   liquidityHook: {
     env: "V4_LIQUIDITY_GROWTH_HOOK",
-    events: ["PoolRegistered", "ProtocolDepthSet", "ProtocolDepthProposed", "PoolFeeTaken", "PoolFeeRecordFailed"],
+    events: ["PoolRegistered", "ProtocolDepthSet", "ProtocolDepthProposed", "PoolFeeTaken"],
   },
   liquidityVault: {
     env: "V4_LIQUIDITY_GROWTH_VAULT",
@@ -37,7 +37,7 @@ export const REQUIRED_MONITOR_SURFACES = Object.freeze({
   },
   basketFeeCollector: {
     env: "V4_BASKET_FEE_COLLECTOR",
-    events: ["AllowedExecutorSet", "AllowedSelectorSet", "AllowlistFrozenSet", "SwapExecuted", "NaraRewardsDeposited", "EthRewardsNotified"],
+    events: ["RouteProposed", "RouteExecuted", "RouteCancelled", "UsdcConvertedAndNotified", "NaraRewardsDeposited", "EthRewardsNotified"],
   },
   genesisRewardDistributor: {
     env: "V4_GENESIS_REWARD_DISTRIBUTOR",
