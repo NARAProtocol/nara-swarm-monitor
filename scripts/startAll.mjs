@@ -1,6 +1,14 @@
-﻿import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 
 console.log("🚀 Starting NARA Swarm Monitor, Telegram Console & Autonomous Scheduler...");
+
+const validation = spawnSync(process.execPath, ["scripts/validateFreshV4Env.mjs", "--no-env-files"], {
+  stdio: "inherit",
+  env: process.env,
+});
+if (validation.status !== 0) {
+  process.exit(validation.status ?? 1);
+}
 
 // 1. Start Ponder indexer
 const ponder = spawn("npx", ["ponder", "start", "--schema", "public"], {
@@ -20,6 +28,8 @@ if (process.env.TELEGRAM_BOT_TOKEN) {
 
   bot.on("exit", (code) => {
     console.log("Telegram bot exited with code", code);
+    ponder.kill("SIGTERM");
+    process.exit(code ?? 1);
   });
 }
 
