@@ -12,5 +12,6 @@ import "./testEnvValidation.mjs";
 import "./testSurfaceCoverage.mjs";
 import "./testEpochHealth.mjs";
 import "./testEpochSentinelRuntime.mjs";
+import "./testLargeBuyWatcherRuntime.mjs";
 import "./testSqlRuntime.mjs";
 import "./testEcosystemAbiDrift.mjs";

@@ -122,6 +122,10 @@ address.
 `V4_LIQUIDITY_COMPOUNDER`
 : Required by both profiles. Fresh liquidity compounder address.
 
+`V4_USDC_TOKEN`
+: Verified Base USDC address used to prove that a Hook fee event is a canonical
+NARA buy before the large-buy watcher notifies.
+
 `V4_BASKET_FEE_COLLECTOR`
 : Required by the full profile. Canonical basket V2 fee collector.
 
@@ -191,6 +195,26 @@ stored.
 `DISCORD_WEBHOOK_URL`
 : Optional Discord webhook URL. The value must stay in env only and is not
 stored in `notification_deliveries`.
+
+`LARGE_BUY_ALERT_ENABLED`
+: Enables the independent read-only canonical NARA/USDC large-buy watcher.
+
+`LARGE_BUY_ALERT_MIN_USDC`
+: Gross USDC input threshold with up to six decimals. Production uses `100`.
+
+`LARGE_BUY_ALERT_START_BLOCK`
+: First Base block eligible for notification. Set it to the first future block
+at activation so historical swaps cannot create Telegram alerts.
+
+`LARGE_BUY_ALERT_POLL_SECONDS`
+: RPC polling cadence. Production uses `10`; validation refuses values below
+five seconds.
+
+`LARGE_BUY_ALERT_CONFIRMATIONS`
+: Base confirmation depth before sending. Production uses `2`.
+
+`LARGE_BUY_ALERT_MAX_BLOCKS_PER_SCAN`
+: Maximum contiguous Base range per catch-up query. Production uses `500`.
 
 ## API
 
