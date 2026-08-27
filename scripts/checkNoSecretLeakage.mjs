@@ -137,6 +137,7 @@ const validEnv = {
   MONITOR_PROFILE: "core",
   BASE_RPC_URL: "https://mainnet.base.org",
   DATABASE_URL: "postgres://postgres:postgres@localhost:5432/nara_monitor",
+  DATABASE_SCHEMA: "nara_v4_monitor",
   V4_START_BLOCK: "1",
   V4_EPOCH_LENGTH_SECONDS: "900",
   V4_NARA_TOKEN: "0x1000000000000000000000000000000000000001",

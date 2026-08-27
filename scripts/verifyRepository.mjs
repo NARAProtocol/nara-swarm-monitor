@@ -17,6 +17,7 @@ const environment = {
   DATABASE_URL:
     process.env.DATABASE_URL ??
     "postgres://verification:verification@127.0.0.1:5432/nara_monitor_verification",
+  DATABASE_SCHEMA: process.env.DATABASE_SCHEMA ?? "nara_v4_monitor",
 };
 
 for (const command of commands) {

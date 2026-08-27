@@ -24,6 +24,7 @@ const requiredCoreKeys = [
   "CHAIN_ID",
   "BASE_RPC_URL",
   "DATABASE_URL",
+  "DATABASE_SCHEMA",
   "V4_START_BLOCK",
   "V4_EPOCH_LENGTH_SECONDS",
 ];
@@ -80,6 +81,10 @@ function envStatus(env) {
   }
   const profile = (env.MONITOR_PROFILE || "full").trim().toLowerCase();
   if (profile !== "core" && profile !== "full") invalid.push("MONITOR_PROFILE");
+  const databaseSchema = env.DATABASE_SCHEMA?.trim() ?? "";
+  if (!/^[A-Za-z_][A-Za-z0-9_]{0,62}$/.test(databaseSchema) || databaseSchema === "information_schema" || databaseSchema.startsWith("pg_")) {
+    invalid.push("DATABASE_SCHEMA");
+  }
   const requiredAddressKeys = profile === "core" ? coreRequiredAddressKeys : fullRequiredAddressKeys;
   for (const key of requiredAddressKeys) {
     const value = env[key]?.trim();
@@ -116,6 +121,7 @@ const apiHost = env.API_HOST || "127.0.0.1";
 const apiPort = env.API_PORT || "42069";
 const apiReadOnly = env.API_READ_ONLY || "true";
 const apiMaxLimit = env.API_MAX_LIMIT || "250";
+const databaseSchema = env.DATABASE_SCHEMA?.trim() || "unavailable";
 
 console.log("NARA monitor health");
 console.log(`Env validity: ${status.ok ? "ok" : "not ok"}`);
@@ -128,7 +134,15 @@ if (!env.DATABASE_URL) {
   process.exit(0);
 }
 
-const client = new pg.Client({ connectionString: env.DATABASE_URL });
+if (status.missing.includes("DATABASE_SCHEMA") || status.invalid.includes("DATABASE_SCHEMA")) {
+  console.log("DB connection: unavailable (DATABASE_SCHEMA missing or invalid)");
+  process.exit(1);
+}
+
+const client = new pg.Client({
+  connectionString: env.DATABASE_URL,
+  options: `-c search_path=${databaseSchema}`,
+});
 try {
   await client.connect();
   console.log("DB connection: ok");

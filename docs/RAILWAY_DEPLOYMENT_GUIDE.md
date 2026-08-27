@@ -31,6 +31,7 @@ Click on your `nara-swarm-monitor` service box, go to the **"Variables"** tab, a
 CHAIN_ID=8453
 MONITOR_PROFILE=core
 BASE_RPC_URL=https://base-mainnet.g.alchemy.com/v2/YOUR_KEY
+DATABASE_SCHEMA=nara_v4_monitor
 V4_START_BLOCK=49719008
 V4_EPOCH_LENGTH_SECONDS=900
 V4_MAX_EPOCH_BACKLOG=8
@@ -52,7 +53,7 @@ NOTIFY_YELLOW=true
 MONITOR_CYCLE_INTERVAL_SECONDS=600
 ```
 
-*(Note: Replace `BASE_RPC_URL`, `TELEGRAM_BOT_TOKEN`, and `TELEGRAM_CHAT_ID` with your own credentials).*
+*(Note: Replace `BASE_RPC_URL`, `TELEGRAM_BOT_TOKEN`, and `TELEGRAM_CHAT_ID` with your own credentials). Keep `DATABASE_SCHEMA` dedicated to this monitor; do not reuse a schema owned by another Ponder app.*
 
 The core profile intentionally leaves `V4_POSITION_NFT` and every other
 deferred surface unset until a verified integration-ready manifest and
