@@ -3,6 +3,7 @@ import pg from "pg";
 import superjson from "superjson";
 import {
   postgresClientConfig,
+  ponderSqlQuery,
   rowsFromPonderSqlResponse,
 } from "./sqlRuntime.mjs";
 
@@ -345,7 +346,7 @@ export async function routeNotification(report, options = {}) {
 }
 
 export async function queryPonderSql(baseUrl, sql) {
-  const query = encodeURIComponent(superjson.stringify({ sql }));
+  const query = encodeURIComponent(superjson.stringify(ponderSqlQuery(sql)));
   const response = await fetch(`${baseUrl.replace(/\/$/, "")}/db?sql=${query}`);
   if (!response.ok) throw new Error(`Ponder SQL query failed (${response.status}): ${await response.text()}`);
   const body = await response.json();

@@ -53,7 +53,9 @@ deployment config confirms it.
   scan.
 
 `COMMANDER_SQL_URL`
-: Read-only Ponder SQL endpoint. Defaults to `http://localhost:42069/sql`.
+: Read-only Ponder SQL endpoint. Defaults to `http://localhost:42069/sql` for
+local development. Railway uses `http://127.0.0.1:8080/sql` because its
+injected `PORT` is `8080`.
 
 ## Contracts
 

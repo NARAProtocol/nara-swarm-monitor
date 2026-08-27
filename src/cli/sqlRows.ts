@@ -23,6 +23,10 @@ export function rowsFromPonderSqlResponse(body: unknown): Record<string, unknown
   return rows.map(camelizeSqlRow);
 }
 
+export function ponderSqlQuery(sql: string): { sql: string; params: unknown[]; typings: unknown[] } {
+  return { sql, params: [], typings: [] };
+}
+
 export function postgresClientConfig(databaseUrl: string, env: NodeJS.ProcessEnv = process.env): ClientConfig {
   const config: ClientConfig = { connectionString: databaseUrl };
   const schema = String(env.DATABASE_SCHEMA || "").trim();

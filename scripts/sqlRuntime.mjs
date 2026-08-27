@@ -19,6 +19,10 @@ export function rowsFromPonderSqlResponse(body) {
   return rows.map(camelizeSqlRow);
 }
 
+export function ponderSqlQuery(sql) {
+  return { sql, params: [], typings: [] };
+}
+
 export function postgresClientConfig(databaseUrl, env = process.env) {
   const config = { connectionString: databaseUrl };
   const schema = String(env.DATABASE_SCHEMA || "").trim();

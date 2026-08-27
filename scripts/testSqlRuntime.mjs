@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {
   camelizeSqlKey,
   camelizeSqlRow,
+  ponderSqlQuery,
   postgresClientConfig,
   rowsFromPonderSqlResponse,
 } from "./sqlRuntime.mjs";
@@ -18,6 +19,10 @@ assert.deepEqual(
 assert.deepEqual(
   rowsFromPonderSqlResponse({ result: { rows: [{ open_alert_count: 2 }] } }),
   [{ openAlertCount: 2 }],
+);
+assert.deepEqual(
+  ponderSqlQuery("select * from open_alerts"),
+  { sql: "select * from open_alerts", params: [], typings: [] },
 );
 assert.deepEqual(
   postgresClientConfig("postgres://example", { DATABASE_SCHEMA: "nara_v4_monitor" }),
