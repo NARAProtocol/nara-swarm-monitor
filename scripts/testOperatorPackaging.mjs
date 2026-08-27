@@ -62,7 +62,10 @@ assert.match(startAllSource, /validateFreshV4Env\.mjs/, "production start valida
 assert.match(startAllSource, /process\.env\.DATABASE_SCHEMA/, "production start uses the configured database schema");
 assert.doesNotMatch(startAllSource, /--schema", "public"/, "production start does not hardcode the shared public schema");
 assert.doesNotMatch(startAllSource, /shell:\s*true/, "production child processes do not use shell execution");
-assert.match(startAllSource, /ponder\.kill\("SIGTERM"\)/, "Telegram listener failure stops the parent service");
+assert.match(startAllSource, /scheduleRestart\("Ponder"/, "Ponder is supervised without stopping the sentinel");
+assert.match(startAllSource, /scheduleRestart\("Telegram bot"/, "Telegram is supervised without stopping the sentinel");
+assert.match(startAllSource, /checkEpochHealth\.mjs", "--sentinel"/, "production starts the independent epoch sentinel");
+assert.match(startAllSource, /EPOCH_SENTINEL_INTERVAL_SECONDS/, "epoch sentinel cadence is configurable");
 
 const cycleDryRun = spawnSync(process.execPath, ["scripts/monitorCycle.mjs", "--dry-run"], {
   encoding: "utf8",

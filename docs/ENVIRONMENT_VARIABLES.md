@@ -38,8 +38,24 @@ deployment config confirms it.
 
 `V4_MAX_EPOCH_BACKLOG`
 : Maximum backlog considered healthy by the direct-state epoch poll. Defaults
-  to `1`. A backlog above eight is always RED because it exceeds the engine's
-  user-call JIT settlement limit.
+  to `1`.
+
+`V4_EPOCH_CRITICAL_BACKLOG`
+: Early critical paging threshold. Production uses `5`, before the Engine's
+  eight-epoch user-call JIT settlement limit is exceeded.
+
+`EPOCH_SENTINEL_INTERVAL_SECONDS`
+: Independent direct-chain epoch polling cadence. Production uses `300` (five
+  minutes); the sentinel does not depend on Ponder, Commander, or Postgres.
+
+`EPOCH_ALERT_REPEAT_SECONDS`
+: Repeat interval for an unchanged YELLOW or RED state. Production uses `1800`
+  (30 minutes). Status transitions notify immediately.
+
+`BASE_BACKUP_RPC_URL_1` / `BASE_BACKUP_RPC_URL_2`
+: Optional independent Base read providers used sequentially if the primary
+  direct-state request fails. Provider URLs are never included in reports or
+  logs.
 
 `FAILED_TX_SCAN_MAX_BLOCKS`
 : Maximum blocks scanned by one recurring failed-transaction pass. Defaults to

@@ -80,6 +80,9 @@ expectFail(runValidation({ MONITOR_PROFILE: "invalid" }), /MONITOR_PROFILE/, "un
 expectFail(runValidation({ V4_EPOCH_LENGTH_SECONDS: "" }), /V4_EPOCH_LENGTH_SECONDS/, "missing epoch length fails");
 expectFail(runValidation({ V4_EPOCH_LENGTH_SECONDS: "0" }), /V4_EPOCH_LENGTH_SECONDS/, "zero epoch length fails");
 expectFail(runValidation({ FAILED_TX_SCAN_MAX_BLOCKS: "0" }), /FAILED_TX_SCAN_MAX_BLOCKS/, "zero failed transaction scan cap fails");
+expectFail(runValidation({ V4_MAX_EPOCH_BACKLOG: "5", V4_EPOCH_CRITICAL_BACKLOG: "5" }), /healthy < critical/, "overlapping epoch thresholds fail");
+expectFail(runValidation({ V4_EPOCH_CRITICAL_BACKLOG: "9" }), /between 2 and 8/, "late critical epoch threshold fails");
+expectFail(runValidation({ EPOCH_SENTINEL_INTERVAL_SECONDS: "59" }), /at least 60/, "too-fast epoch polling fails");
 expectFail(runValidation({ V4_NARA_TOKEN: "0xE444de61752bD13D1D37Ee59c31ef4e489bd727C" }), /retired NARA address/, "retired v3 address fails");
 expectFail(runValidation({ API_READ_ONLY: "false" }), /API_READ_ONLY/, "write-enabled API flag fails");
 expectFail(runValidation({ NOTIFY_CHANNELS: "webhook", WEBHOOK_URL: "" }), /WEBHOOK_URL/, "webhook channel requires webhook URL");
