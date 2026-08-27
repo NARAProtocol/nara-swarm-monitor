@@ -33,7 +33,26 @@ copy a signer, dispatch a workflow, or write protocol state.
 
 ## Activation boundary
 
-Source merge, Railway deployment, production variable verification, and one
-observed five-minute cycle are separate evidence. Do not describe the sentinel
-as hosted until all four are recorded. The current onchain backlog is not
-cleared by this monitor change.
+The read-only sentinel is hosted and active:
+
+- protected monitor PR `#24` merged as
+  `def0d2aaab6aef34791f7afbbf8bb30eab545ee8`;
+- the immutable merge was cherry-picked to the established Railway deployment
+  branch as `1e203c4`;
+- Railway deployment `66f20715-0039-43f3-adfb-e77c47600a71` reached
+  `SUCCESS` with one active instance;
+- production policy is healthy backlog `1`, critical backlog `5`, poll interval
+  `300` seconds, and unresolved-alert repeat interval `1800` seconds;
+- the first hosted poll reported RED at backlog `116` and routed the external
+  alert; and
+- the next five-minute polls reported backlogs `117` and `118` with
+  `notification=cooldown`, proving recurrence and duplicate suppression.
+
+The broad monitor cycle completed independently after deployment, and Ponder
+resumed its existing backfill through crash recovery. A forced-primary-failure
+rehearsal selected configured fallback provider `1` without printing a provider
+URL.
+
+This activation does not clear the onchain backlog. The protocol-side keeper
+remains the only write path, and the monitor still contains no signer,
+credential, workflow dispatch, or transaction code.
