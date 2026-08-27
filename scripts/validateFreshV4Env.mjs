@@ -142,6 +142,20 @@ function assertDatabaseUrl(name) {
   }
 }
 
+function assertDatabaseSchema(name) {
+  const value = valueOf(name);
+  if (!value) {
+    fail(`${name} is required.`);
+    return;
+  }
+  if (!/^[A-Za-z_][A-Za-z0-9_]{0,62}$/.test(value)) {
+    fail(`${name} must be a valid PostgreSQL identifier of at most 63 characters.`);
+  }
+  if (value === "information_schema" || value.startsWith("pg_")) {
+    fail(`${name} cannot use a PostgreSQL system schema.`);
+  }
+}
+
 function assertAddress(name, required = true) {
   const value = env[name]?.trim();
   if (!value) {
@@ -212,6 +226,7 @@ function assertNotificationConfig() {
 assertPositiveInteger("CHAIN_ID", "for the active v4 monitor chain");
 assertHttpUrl("BASE_RPC_URL");
 assertDatabaseUrl("DATABASE_URL");
+assertDatabaseSchema("DATABASE_SCHEMA");
 assertPositiveInteger("V4_START_BLOCK", "from the fresh v4 deployment");
 assertPositiveInteger("V4_EPOCH_LENGTH_SECONDS", "for the deployed engine epoch length");
 if (monitorProfile !== "core" && monitorProfile !== "full") {

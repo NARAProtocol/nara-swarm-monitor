@@ -20,6 +20,8 @@ Use this checklist before starting or restarting the monitor stack.
       after every deferred address exists.
 - [ ] `BASE_RPC_URL` is configured.
 - [ ] `DATABASE_URL` is configured.
+- [ ] `DATABASE_SCHEMA` is a dedicated schema such as `nara_v4_monitor`, not a
+      schema owned by another Ponder app.
 - [ ] `V4_START_BLOCK` is set from the fresh v4 deployment.
 - [ ] `V4_EPOCH_LENGTH_SECONDS` is configured for the deployed engine.
 - [ ] Fresh v4 contract addresses are set:
