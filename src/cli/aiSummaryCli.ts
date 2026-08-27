@@ -7,10 +7,6 @@ import {
   type AiSummaryRow,
   type CommanderReportStoredRow,
 } from "../agents/aiSummarizer";
-import {
-  postgresClientConfig,
-  rowsFromPonderSqlResponse,
-} from "./sqlRows";
 
 function sqlEndpoint(): string {
   return (process.env.COMMANDER_SQL_URL || "http://localhost:42069/sql").replace(/\/$/, "");
@@ -23,11 +19,18 @@ async function queryPonderSql(baseUrl: string, sql: string): Promise<Record<stri
     throw new Error(`Ponder SQL query failed (${response.status}): ${await response.text()}`);
   }
   const body = await response.json() as unknown;
-  return rowsFromPonderSqlResponse(body);
+  if (Array.isArray(body)) return body as Record<string, unknown>[];
+  if (body && typeof body === "object" && Array.isArray((body as { rows?: unknown }).rows)) {
+    return (body as { rows: Record<string, unknown>[] }).rows;
+  }
+  if (body && typeof body === "object" && Array.isArray((body as { result?: { rows?: unknown } }).result?.rows)) {
+    return (body as { result: { rows: Record<string, unknown>[] } }).result.rows;
+  }
+  return [];
 }
 
 async function latestCommanderReportRow(): Promise<CommanderReportStoredRow> {
-  const rows = await queryPonderSql(sqlEndpoint(), "select * from commander_reports order by created_at desc limit 1");
+  const rows = await queryPonderSql(sqlEndpoint(), 'select * from commander_reports order by "createdAt" desc limit 1');
   if (rows.length === 0) {
     throw new Error("No commander_reports rows available. Run/store Commander v1 before summarizing.");
   }
@@ -38,27 +41,27 @@ async function storeAiSummary(summary: AiSummaryRow): Promise<void> {
   if (!process.env.DATABASE_URL) {
     throw new Error("DATABASE_URL is required to store ai_summaries.");
   }
-  const client = new pg.Client(postgresClientConfig(process.env.DATABASE_URL));
+  const client = new pg.Client({ connectionString: process.env.DATABASE_URL });
   await client.connect();
   try {
     await client.query(
       `insert into ai_summaries (
-        id, chain_id, commander_report_id, model_provider, model_name,
-        status, severity, summary_text, operator_summary, risk_summary,
-        recommended_actions_text, evidence_json, input_hash, output_hash, created_at
+        id, "chainId", "commanderReportId", "modelProvider", "modelName",
+        status, severity, "summaryText", "operatorSummary", "riskSummary",
+        "recommendedActionsText", "evidenceJson", "inputHash", "outputHash", "createdAt"
       ) values (
         $1, $2, $3, $4, $5,
         $6, $7, $8, $9, $10,
         $11, $12, $13, $14, $15
       )
       on conflict (id) do update set
-        summary_text = excluded.summary_text,
-        operator_summary = excluded.operator_summary,
-        risk_summary = excluded.risk_summary,
-        recommended_actions_text = excluded.recommended_actions_text,
-        evidence_json = excluded.evidence_json,
-        output_hash = excluded.output_hash,
-        created_at = excluded.created_at`,
+        "summaryText" = excluded."summaryText",
+        "operatorSummary" = excluded."operatorSummary",
+        "riskSummary" = excluded."riskSummary",
+        "recommendedActionsText" = excluded."recommendedActionsText",
+        "evidenceJson" = excluded."evidenceJson",
+        "outputHash" = excluded."outputHash",
+        "createdAt" = excluded."createdAt"`,
       [
         summary.id,
         summary.chainId,
