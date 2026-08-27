@@ -17,31 +17,101 @@ const runtimeEnv = {
   PGOPTIONS: `-c search_path=${databaseSchema}`,
 };
 
-// 1. Start Ponder indexer
-const ponderCli = resolve("node_modules/ponder/dist/esm/bin/ponder.js");
-const ponder = spawn(process.execPath, [ponderCli, "start", "--schema", databaseSchema], {
-  stdio: "inherit",
-  env: runtimeEnv,
-});
+let shuttingDown = false;
+let ponder;
+let bot;
 
-// 2. Start Telegram Bot listener if TELEGRAM_BOT_TOKEN is set
-if (process.env.TELEGRAM_BOT_TOKEN) {
-  console.log("🤖 Starting Telegram interactive listener in background...");
-  const bot = spawn(process.execPath, ["scripts/telegramBotListener.mjs"], {
+function scheduleRestart(label, start) {
+  if (shuttingDown) return;
+  console.error(`${label} stopped; restarting in 30 seconds while the epoch sentinel remains active.`);
+  setTimeout(start, 30_000);
+}
+
+// 1. Start and supervise the Ponder indexer without coupling epoch polling to it.
+const ponderCli = resolve("node_modules/ponder/dist/esm/bin/ponder.js");
+function startPonder() {
+  let stopped = false;
+  const handleStop = () => {
+    if (stopped) return;
+    stopped = true;
+    ponder = undefined;
+    scheduleRestart("Ponder", startPonder);
+  };
+  ponder = spawn(process.execPath, [ponderCli, "start", "--schema", databaseSchema], {
     stdio: "inherit",
     env: runtimeEnv,
   });
+  ponder.on("exit", handleStop);
+  ponder.on("error", (error) => {
+    console.error("Ponder failed to start:", error.message);
+    handleStop();
+  });
+}
+startPonder();
 
-  bot.on("exit", (code) => {
-    console.log("Telegram bot exited with code", code);
-    ponder.kill("SIGTERM");
-    process.exit(code ?? 1);
+// 2. Start Telegram Bot listener if TELEGRAM_BOT_TOKEN is set
+if (process.env.TELEGRAM_BOT_TOKEN) {
+  const startTelegramBot = () => {
+    let stopped = false;
+    const handleStop = () => {
+      if (stopped) return;
+      stopped = true;
+      bot = undefined;
+      scheduleRestart("Telegram bot", startTelegramBot);
+    };
+    console.log("🤖 Starting Telegram interactive listener in background...");
+    bot = spawn(process.execPath, ["scripts/telegramBotListener.mjs"], {
+      stdio: "inherit",
+      env: runtimeEnv,
+    });
+    bot.on("exit", handleStop);
+    bot.on("error", (error) => {
+      console.error("Telegram bot failed to start:", error.message);
+      handleStop();
+    });
+  };
+  startTelegramBot();
+}
+
+// 3. Independent epoch sentinel. It has no Ponder, database, Commander, or
+// summarizer dependency and runs more frequently than the broad monitor cycle.
+const epochSentinelIntervalSeconds = Number(process.env.EPOCH_SENTINEL_INTERVAL_SECONDS || "300");
+if (!Number.isSafeInteger(epochSentinelIntervalSeconds) || epochSentinelIntervalSeconds < 60) {
+  throw new Error("EPOCH_SENTINEL_INTERVAL_SECONDS must be an integer of at least 60 seconds");
+}
+console.log(`⏱️ Epoch sentinel scheduled every ${epochSentinelIntervalSeconds}s`);
+
+let epochSentinelRunning = false;
+
+function runEpochSentinel() {
+  if (epochSentinelRunning) {
+    console.log(`⏭️ [${new Date().toISOString()}] Previous epoch sentinel is still running; skipping overlap.`);
+    return;
+  }
+  epochSentinelRunning = true;
+  const sentinel = spawn(process.execPath, ["scripts/checkEpochHealth.mjs", "--sentinel"], {
+    stdio: "inherit",
+    env: runtimeEnv,
+  });
+  sentinel.on("exit", (code) => {
+    epochSentinelRunning = false;
+    if (code !== 0) console.error(`Epoch sentinel exited with status ${code}`);
+  });
+  sentinel.on("error", (error) => {
+    epochSentinelRunning = false;
+    console.error("Epoch sentinel failed to start:", error.message);
   });
 }
 
-// 3. Autonomous Swarm Heartbeat Scheduler (every 10 minutes)
+setTimeout(runEpochSentinel, 10_000);
+setInterval(runEpochSentinel, epochSentinelIntervalSeconds * 1000);
+
+// 4. Autonomous broad monitor cycle (every 10 minutes by default)
 const intervalSeconds = Number(process.env.MONITOR_CYCLE_INTERVAL_SECONDS || "600");
-console.log(`⏱️ Autonomous Swarm Monitor Cycle scheduled every ${intervalSeconds}s (10 min)`);
+if (!Number.isSafeInteger(intervalSeconds) || intervalSeconds < 60) {
+  throw new Error("MONITOR_CYCLE_INTERVAL_SECONDS must be an integer of at least 60 seconds");
+}
+console.log(`⏱️ Autonomous Swarm Monitor Cycle scheduled every ${intervalSeconds}s`);
 
 let monitorCycleRunning = false;
 
@@ -74,6 +144,11 @@ setTimeout(runMonitorCycle, 45_000);
 // Recurring cycle every intervalSeconds
 setInterval(runMonitorCycle, intervalSeconds * 1000);
 
-ponder.on("exit", (code) => {
-  process.exit(code ?? 0);
-});
+for (const signal of ["SIGINT", "SIGTERM"]) {
+  process.once(signal, () => {
+    shuttingDown = true;
+    ponder?.kill("SIGTERM");
+    bot?.kill("SIGTERM");
+    process.exit(0);
+  });
+}

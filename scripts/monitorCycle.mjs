@@ -2,7 +2,6 @@ import { spawnSync } from "node:child_process";
 
 const steps = [
   ["validate:v4-env", "Validate fresh v4 environment"],
-  ["check:epoch-health", "Poll engine epoch freshness and route alerts"],
   ["scan:failed", "Scan failed active v4 transactions"],
   ["commander", "Generate deterministic Commander report"],
   ["summarize", "Generate local_stub AI summary"],

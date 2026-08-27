@@ -110,6 +110,24 @@ function assertPositiveInteger(name, description) {
   }
 }
 
+function assertOptionalPositiveInteger(name, description) {
+  if (!valueOf(name)) return;
+  assertPositiveInteger(name, description);
+}
+
+function assertOptionalIntegerAtLeast(name, minimum, description) {
+  const value = valueOf(name);
+  if (!value) return;
+  if (!Number.isSafeInteger(Number(value)) || Number(value) < minimum) {
+    fail(`${name} must be an integer of at least ${minimum}${description ? ` ${description}` : ""}.`);
+  }
+}
+
+function assertOptionalHttpUrl(name) {
+  if (!valueOf(name)) return;
+  assertHttpUrl(name);
+}
+
 function assertHttpUrl(name) {
   const value = valueOf(name);
   if (!value) {
@@ -230,6 +248,18 @@ assertDatabaseSchema("DATABASE_SCHEMA");
 assertPositiveInteger("V4_START_BLOCK", "from the fresh v4 deployment");
 assertPositiveInteger("V4_EPOCH_LENGTH_SECONDS", "for the deployed engine epoch length");
 assertPositiveInteger("FAILED_TX_SCAN_MAX_BLOCKS", "for bounded recurring receipt scans");
+assertOptionalPositiveInteger("V4_MAX_EPOCH_BACKLOG", "for the healthy epoch tolerance");
+assertOptionalPositiveInteger("V4_EPOCH_CRITICAL_BACKLOG", "for early critical epoch paging");
+assertOptionalIntegerAtLeast("EPOCH_SENTINEL_INTERVAL_SECONDS", 60, "for the independent epoch poll interval");
+assertOptionalIntegerAtLeast("EPOCH_ALERT_REPEAT_SECONDS", 60, "for repeated unresolved epoch alerts");
+assertOptionalIntegerAtLeast("MONITOR_CYCLE_INTERVAL_SECONDS", 60, "for the broad monitor cycle interval");
+assertOptionalHttpUrl("BASE_BACKUP_RPC_URL_1");
+assertOptionalHttpUrl("BASE_BACKUP_RPC_URL_2");
+const healthyEpochBacklog = Number(valueOf("V4_MAX_EPOCH_BACKLOG") || "1");
+const criticalEpochBacklog = Number(valueOf("V4_EPOCH_CRITICAL_BACKLOG") || "5");
+if (criticalEpochBacklog < 2 || criticalEpochBacklog > 8 || healthyEpochBacklog >= criticalEpochBacklog) {
+  fail("V4 epoch thresholds must satisfy healthy < critical and critical must be between 2 and 8.");
+}
 if (monitorProfile !== "core" && monitorProfile !== "full") {
   fail("MONITOR_PROFILE must be core or full.");
 }
