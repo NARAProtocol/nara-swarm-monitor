@@ -57,7 +57,21 @@ for (const scriptName of Object.keys(packageJson.scripts)) {
 assert.doesNotMatch(telegramSource, /0x[0-9a-fA-F]{40}/, "Telegram listener contains no hardcoded contract address");
 assert.match(telegramSource, /requiredAddress\("V4_ENGINE"\)/, "Telegram listener requires the configured Engine");
 assert.match(telegramSource, /safeGetAddress\(process\.env\.V4_POSITION_NFT\)/, "Position NFT remains optional in core profile");
+assert.match(telegramSource, /Unavailable \(core integration gated\)/, "Unset Position NFT telemetry is reported as integration gated, not zero");
+assert.match(telegramSource, /Unavailable \(configured read failed\)/, "Failed configured Position NFT reads are reported as unavailable, not zero");
 assert.doesNotMatch(railwayGuide, /V4_POSITION_NFT=0x[0-9a-fA-F]{40}/, "Railway core profile does not publish an unverified NFT address");
+assert.match(railwayGuide, /V4_START_BLOCK=49718979/, "Railway guide uses the verified fresh-v4 scan start");
+assert.match(railwayGuide, /LARGE_BUY_ALERT_ENABLED=false/, "Railway guide keeps optional buy alerts disabled by default");
+assert.doesNotMatch(
+  telegramSource,
+  /Alpha Dossier|Yield Harvester|Diamond Conviction|Titan Mega Whale|Exposure Profile|Rank Tier|x Boost/i,
+  "Telegram wallet copy contains no promotional investment labels",
+);
+assert.match(
+  telegramSource,
+  /not investment research, a trading signal/i,
+  "Telegram wallet copy labels its output as operational telemetry",
+);
 assert.match(startAllSource, /validateFreshV4Env\.mjs/, "production start validates the deployment environment before launching");
 assert.match(startAllSource, /process\.env\.DATABASE_SCHEMA/, "production start uses the configured database schema");
 assert.doesNotMatch(startAllSource, /--schema", "public"/, "production start does not hardcode the shared public schema");

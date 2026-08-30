@@ -93,10 +93,10 @@ async function registerMenuCommands() {
   const commands = [
     { command: "status", description: "📊 Live protocol status & supply" },
     { command: "health", description: "⏳ Engine epoch sync & keeper check" },
-    { command: "whales", description: "🐋 Top conviction lockers & whale list" },
+    { command: "whales", description: "Largest indexed NARA lock balances" },
     { command: "cliffs", description: "⏱️ Upcoming 24h & 7d unlock cliffs" },
     { command: "contracts", description: "📜 Verified v4 contract addresses" },
-    { command: "wallet", description: "💎 Alpha Dossier: /wallet 0x..." },
+    { command: "wallet", description: "Wallet activity report: /wallet 0x..." },
     { command: "ping", description: "🏓 Check bot latency & health" },
     { command: "help", description: "ℹ️ Show help and command overview" },
   ];
@@ -156,13 +156,13 @@ async function handleCommand(msg) {
       "",
       "• `/status` — Live system status & block height",
       "• `/health` — Engine epoch sync & backlog check",
-      "• `/whales` — Top lock conviction & whale rankings",
+      "• `/whales` — Largest indexed NARA lock balances",
       "• `/cliffs` — Upcoming 24h & 7d unlock cliffs",
       "• `/contracts` — Verified v4 contract addresses",
-      "• `/wallet <0x...>` — 💎 Deep Alpha Dossier on any wallet",
+      "• `/wallet <0x...>` — Factual onchain wallet activity report",
       "• `/ping` — Test bot latency & connectivity",
       "━━━━━━━━━━━━━━━━━━━━",
-      "🛡️ *NARA Fixed v4 Production Stack*"
+      "⚠️ *Technical live-testing telemetry only — not investment research, a trading signal, or a recommendation.*"
     ].join("\n");
     return sendTg(fromChatId, helpMsg);
   }
@@ -229,10 +229,10 @@ async function handleCommand(msg) {
         "📦 *Latest Block:* #" + blockNumber,
         "🪙 *Total NARA Supply:* " + formattedSupply + " NARA",
         "",
-        "🛡️ *Security Status:*",
-        "• Direct Admin Safeguard: *Active*",
-        "• Flash Loan & Revert Scanner: *Active*",
-        "• Treasury & POL Monitor: *Active*",
+        "🛡️ *Configured Monitor Coverage:*",
+        "• Direct admin checks: *Configured*",
+        "• Reverted-transaction scanner: *Configured*",
+        "• Treasury and POL observations: *Configured*",
         "━━━━━━━━━━━━━━━━━━━━"
       ].join("\n");
       return sendTg(fromChatId, statusMsg);
@@ -274,15 +274,15 @@ async function handleCommand(msg) {
       if (sorted.length > 0) {
         const list = sorted.map((r, i) => `${i + 1}. \`${r.owner.slice(0, 8)}...${r.owner.slice(-6)}\` — *${Number(formatUnits(r.amount, 18)).toLocaleString()} NARA* (${r.count} lock${r.count > 1 ? 's' : ''})`).join("\n");
         const msgText = [
-          "🐋 *Top NARA Whales & Conviction Lockers*",
+          "*Largest Indexed NARA Lock Balances*",
           "━━━━━━━━━━━━━━━━━━━━",
           list,
           "━━━━━━━━━━━━━━━━━━━━",
-          "💬 *Send `/wallet 0x...` to view any locker's full dossier!*"
+          "Send `/wallet 0x...` for a factual onchain activity report. This ranking is telemetry, not an investment signal."
         ].join("\n");
         return sendTg(fromChatId, msgText);
       } else {
-        return sendTg(fromChatId, "🐋 *Whale Tracking:* No active locked positions found yet.");
+        return sendTg(fromChatId, "*Lock Balance Report:* No active locked positions found in the current read.");
       }
     } catch (e) {
       return sendTg(fromChatId, "❌ Error loading whales: " + e.message);
@@ -301,7 +301,7 @@ async function handleCommand(msg) {
       "• *Unlocking next 24 Hours:* " + c24 + " position(s)",
       "• *Unlocking next 7 Days:* " + c7d + " position(s)",
       "━━━━━━━━━━━━━━━━━━━━",
-      "🟢 *Exits Under Threshold:* No immediate large cliff pressure."
+      "Indexed counts are operational telemetry only; review the underlying positions before any operator action."
     ].join("\n");
     return sendTg(fromChatId, cliffsMsg);
   }
@@ -315,37 +315,39 @@ async function handleCommand(msg) {
       const checksumTarget = getAddress(target);
       const lower = checksumTarget.toLowerCase();
 
-      const [ethBal, naraBal, nftBal, totalSupply, currentEpoch, nextPosId] = await Promise.all([
+      const [ethBal, naraBal, nftBalance, totalSupply, currentEpoch, nextPosId] = await Promise.all([
         client.getBalance({ address: checksumTarget }),
         client.readContract({
           address: tokenAddress,
           abi: tokenAbi,
           functionName: "balanceOf",
           args: [checksumTarget],
-        }).catch(() => 0n),
+        }),
         nftAddress
           ? client.readContract({
               address: nftAddress,
               abi: nftAbi,
               functionName: "balanceOf",
               args: [checksumTarget],
-            }).catch(() => 0n)
-          : Promise.resolve(0n),
+            })
+              .then((value) => ({ status: "available", value }))
+              .catch(() => ({ status: "read_failed", value: null }))
+          : Promise.resolve({ status: "integration_gated", value: null }),
         client.readContract({
           address: tokenAddress,
           abi: tokenAbi,
           functionName: "totalSupply",
-        }).catch(() => 1000000000000000000000000n),
+        }),
         client.readContract({
           address: engineAddress,
           abi: engineAbi,
           functionName: "currentEpoch",
-        }).catch(() => 0n),
+        }),
         client.readContract({
           address: engineAddress,
           abi: engineAbi,
           functionName: "nextPositionId",
-        }).catch(() => 0n),
+        }),
       ]);
 
       const totalPositions = Number(nextPosId);
@@ -416,26 +418,31 @@ async function handleCommand(msg) {
       const weightFormatted = Number(formatUnits(totalWeightBig, 18)).toLocaleString("en-US", { maximumFractionDigits: 2 });
       const claimableNaraFormatted = (Number(formatUnits(totalClaimableNara, 18))).toFixed(4);
       const claimableEthFormatted = (Number(formatEther(totalClaimableEth))).toFixed(6);
+      const positionNftLine = nftBalance.status === "available"
+        ? "• *Position NFTs:* " + nftBalance.value.toString() + " Held"
+        : nftBalance.status === "integration_gated"
+          ? "• *Position NFTs:* Unavailable (core integration gated)"
+          : "• *Position NFTs:* Unavailable (configured read failed)";
 
-      // Archetype classification
-      let archetype = "🌱 EARLY ACCUMULATOR";
-      let rankTier = "💎 DIAMOND HANDS";
+      // Neutral configured and observed labels. These are not suitability or investment classifications.
+      let accountLabel = "Unclassified address";
+      let balanceBand = "Below 10,000 NARA observed";
 
       if (lower === deployerAddress) {
-        archetype = "👑 PROTOCOL DEPLOYER & GENESIS";
-        rankTier = "🌟 GENESIS ARCHITECT (Top 0.1%)";
+        accountLabel = "Configured deployer address";
+        balanceBand = "Administrative address label";
       } else if (lower === treasuryAddress) {
-        archetype = "🏛️ PROTOCOL TREASURY";
-        rankTier = "🛡️ CUSTODIAL RESERVE";
+        accountLabel = "Configured treasury address";
+        balanceBand = "Treasury address label";
       } else if (liquidNara + lockedNara >= 50000) {
-        archetype = "🐋 TITAN MEGA WHALE";
-        rankTier = "🔱 POSEIDON (Top 0.5%)";
+        accountLabel = "Address with observed NARA balance";
+        balanceBand = "50,000+ NARA observed";
       } else if (liquidNara + lockedNara >= 10000) {
-        archetype = "🦈 APEX PROTOCOL LOCKER";
-        rankTier = "💎 DIAMOND CONVICTION (Top 2%)";
+        accountLabel = "Address with observed NARA balance";
+        balanceBand = "10,000–49,999 NARA observed";
       } else if (lockedNara > 0) {
-        archetype = "⚡ ACTIVE YIELD HARVESTER";
-        rankTier = "🌾 COMPOUNDING STAKER";
+        accountLabel = "Address with active lock data";
+        balanceBand = "Active locked balance observed";
       }
 
       const shortAddr = checksumTarget.slice(0, 6) + "..." + checksumTarget.slice(-4);
@@ -446,27 +453,27 @@ async function handleCommand(msg) {
           const lAmt = Number(formatUnits(l.amount, 18)).toLocaleString("en-US", { maximumFractionDigits: 2 });
           const lWgt = Number(formatUnits(l.weight, 18)).toLocaleString("en-US", { maximumFractionDigits: 0 });
           const lClaim = Number(formatUnits(l.claimNara, 18)).toFixed(4);
-          return `• 🔒 *Lock #${l.id}:* ${lAmt} NARA (Weight: ${lWgt}x)\n  ├ *Epochs:* #${l.activationEpoch} → Unlocks @ #${l.unlockEpoch}\n  └ *Accruing Rewards:* +${lClaim} NARA`;
+          return `• 🔒 *Lock #${l.id}:* ${lAmt} NARA (Weight: ${lWgt}x)\n  ├ *Epochs:* #${l.activationEpoch} → Unlocks @ #${l.unlockEpoch}\n  └ *Currently claimable:* ${lClaim} NARA`;
         }).join("\n");
       }
 
-      const dossierMsg = [
-        "💎 *NARA ALPHA DOSSIER: " + shortAddr + "*",
+      const walletReportMsg = [
+        "*NARA Wallet Activity Report: " + shortAddr + "*",
         "━━━━━━━━━━━━━━━━━━━━",
-        "🏷️ *Archetype:* " + archetype,
-        "🏆 *Rank Tier:* " + rankTier,
+        "🏷️ *Configured label:* " + accountLabel,
+        "📊 *Observed balance band:* " + balanceBand,
         "🌐 *Network:* Base Mainnet (Chain ID 8453)",
         "",
-        "💰 *CAPITAL & HOLDINGS*",
+        "*ONCHAIN BALANCES*",
         "• 🪙 *Liquid NARA:* " + liquidNara.toLocaleString("en-US", { maximumFractionDigits: 2 }) + " NARA (*" + sharePct + "%* of Supply)",
         "• 🔒 *Locked NARA:* " + lockedNara.toLocaleString("en-US", { maximumFractionDigits: 2 }) + " NARA (*" + activeLocks.length + " Active*, " + maturedLocks.length + " Matured)",
-        "• ⚡ *Active Weight:* " + weightFormatted + "x Boost",
+        "• *Active weight multiplier:* " + weightFormatted + "x",
         "• 🔷 *Liquid ETH:* " + ethFormatted + " ETH",
-        "• 🖼️ *Position NFTs:* " + nftBal.toString() + " Held",
+        positionNftLine,
         "",
-        "🌾 *LIVE ACCRUING REWARDS*",
-        "• 🎁 *Claimable NARA:* +" + claimableNaraFormatted + " NARA",
-        "• 💵 *Claimable ETH:* +" + claimableEthFormatted + " ETH",
+        "*CURRENTLY CLAIMABLE — READ ONLY*",
+        "• *Claimable NARA:* " + claimableNaraFormatted + " NARA",
+        "• *Claimable ETH:* " + claimableEthFormatted + " ETH",
         "• ⏳ *Current Epoch:* #" + currentEpoch,
         "",
         ...(activeLocks.length > 0 ? [
@@ -474,17 +481,16 @@ async function handleCommand(msg) {
           lockDetailsText,
           ""
         ] : []),
-        "⏳ *MATURITY & EXITS*",
-        "• 🟢 *24h / 7d Pressure:* 0 Cliff Exits",
-        "• 📈 *Exposure Profile:* Ultra-High Conviction Long-Term Locker",
+        "*MATURITY DATA*",
+        "Review each active lock's recorded unlock epoch above.",
         "━━━━━━━━━━━━━━━━━━━━",
         "🔗 [BaseScan Explorer](https://basescan.org/address/" + checksumTarget + ")",
-        "💬 *Send \`/whales\` to view top protocol rankers!*"
+        "Technical live-testing telemetry only. Not investment research, a trading signal, personalized advice, or a recommendation."
       ].join("\n");
 
-      return sendTg(fromChatId, dossierMsg);
+      return sendTg(fromChatId, walletReportMsg);
     } catch (err) {
-      return sendTg(fromChatId, "❌ Error analyzing wallet: " + err.message);
+      return sendTg(fromChatId, "❌ Error loading wallet activity: " + err.message);
     }
   }
 

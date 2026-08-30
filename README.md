@@ -17,6 +17,18 @@ stops startup instead of silently monitoring the wrong contracts.
 > This repository monitors the fresh v4 deployment only. It does not send
 > protocol transactions, hold signing keys, or support retired v3 contracts.
 
+> [!WARNING]
+> **Technical live testing on Base mainnet — not public product availability.**
+> The monitored canonical v4 contracts and NARA/USDC pool use real assets.
+> Alerts, scores, reports, wallet views, and summaries are operator telemetry,
+> not investment research, trading signals, personalized advice, or
+> recommendations to transact. This repository does not establish that any
+> product or interface is available, production-ready, audited, safe, legally
+> approved, or available in any jurisdiction, and contains no evidence of a
+> completed jurisdiction-specific qualified legal review. Onchain
+> transactions are irreversible, liquidity may be limited, and token values
+> can fall to zero.
+
 ## What It Does
 
 - Indexes the active NARA token, engine, liquidity hook, vault, and compounder on Base.
@@ -27,7 +39,7 @@ stops startup instead of silently monitoring the wrong contracts.
 - Independent five-minute epoch sentinel with RPC failover and bounded alert repeats.
 - Autonomous 10-minute background diagnostic cycle for indexed and database-backed checks.
 - Interactive Telegram Console Bot (`@naraswarmbot`) with native chat menu (`/wallet`, `/health`, `/whales`, `/cliffs`, `/status`, `/contracts`, `/ping`).
-- Real-time Crypto Alpha Dossier generator decoding on-chain locks, weights, and accruing yield.
+- Factual wallet activity report showing onchain balances, locks, weights, and currently claimable amounts.
 - Routes proactive emergency alerts to Telegram, Discord, console, or generic webhooks.
 - Independently watches the canonical NARA/USDC v4 Hook and notifies Telegram
   about confirmed buys at or above the configured USDC threshold.
@@ -60,12 +72,17 @@ events, or transaction receipts.
 
 | Profile | Purpose | Required surfaces |
 | --- | --- | --- |
-| `core` | Current production-compatible profile | Token, engine, liquidity hook, liquidity vault, compounder |
+| `core` | Deployed-core observation profile | Token, engine, liquidity hook, liquidity vault, compounder |
 | `full` | Future complete protocol profile | Core plus position, bond, ops, staking, basket, genesis, and bribe surfaces |
 
 Deferred contracts use empty address lists in `core`. The monitor never invents
 placeholder production addresses or deploys contracts merely to satisfy its
 configuration.
+
+The Position NFT Phase-2 baseline is deployed, tested under its recorded
+release gates, source-verified, and Safe-finalized. It remains intentionally
+unset because the canonical manifest records `integrationReady: false`;
+deployment alone does not authorize consumer integration.
 
 ## Quick Start
 
@@ -154,7 +171,7 @@ access to the repository settings.
 | [Architecture](docs/MONITOR_ARCHITECTURE.md) | Data flow, indexed tables, derived views, and agent boundaries |
 | [Environment variables](docs/ENVIRONMENT_VARIABLES.md) | Complete configuration reference |
 | [Operator runbook](docs/OPERATOR_RUNBOOK.md) | Startup order and routine operations |
-| [Deployment checklist](docs/DEPLOYMENT_CHECKLIST.md) | Production readiness and smoke checks |
+| [Deployment checklist](docs/DEPLOYMENT_CHECKLIST.md) | Operator deployment checks and smoke tests |
 | [Recovery procedures](docs/RECOVERY_PROCEDURES.md) | Diagnosing and recovering from runtime failures |
 | [Command reference](docs/COMMANDS.md) | Every supported npm command |
 | [Repository governance](docs/REPOSITORY_GOVERNANCE.md) | Machine-enforced files and live GitHub settings |

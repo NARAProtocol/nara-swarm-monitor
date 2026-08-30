@@ -5,7 +5,6 @@ export type CommanderInputs = {
   critical_alerts: CommanderRow[];
   protocol_risk_summary: CommanderRow[];
   wallet_risk_ranking: CommanderRow[];
-  wallet_conviction_ranking: CommanderRow[];
   wallet_position_summary: CommanderRow[];
   wallet_unlock_risk: CommanderRow[];
   position_current_state: CommanderRow[];
@@ -131,4 +130,3 @@ export function buildCommanderEvidence(inputs: CommanderInputs): CommanderEviden
 
   return evidence;
 }
-

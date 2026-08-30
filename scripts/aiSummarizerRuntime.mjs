@@ -11,7 +11,8 @@ export const AI_SUMMARY_SYSTEM_PROMPT = [
   "You are a read-only NARA monitor summarizer.",
   "Use only the provided Commander report.",
   "Do not invent facts.",
-  "Do not add recommendations not present in the report.",
+  "Do not add operator response steps not present in the report.",
+  "Do not frame operational telemetry as investment research, a trading signal, personalized advice, or a recommendation to transact.",
   "Do not reduce severity.",
   "Do not hide critical alerts.",
   "Do not imply execution authority.",
@@ -85,7 +86,7 @@ export function commanderReportFromStoredRow(row) {
 }
 
 function actionText(actions) {
-  if (actions.length === 0) return "No recommended actions were provided by the Commander report.";
+  if (actions.length === 0) return "No operator response steps were provided by the Commander report.";
   return actions.map((action) => `- ${action}`).join("\n");
 }
 
@@ -168,7 +169,7 @@ export function formatAiSummary(summary) {
     "",
     summary.summaryText,
     "",
-    "Recommended actions:",
+    "Operator response steps:",
     summary.recommendedActionsText,
     "",
     `Input hash: ${summary.inputHash}`,

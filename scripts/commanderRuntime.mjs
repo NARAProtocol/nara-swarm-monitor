@@ -11,7 +11,6 @@ export const COMMANDER_VIEW_NAMES = [
   "critical_alerts",
   "protocol_risk_summary",
   "wallet_risk_ranking",
-  "wallet_conviction_ranking",
   "wallet_position_summary",
   "wallet_unlock_risk",
   "position_current_state",
@@ -35,7 +34,6 @@ const DEFAULT_LIMITS = {
   critical_alerts: 50,
   protocol_risk_summary: 1,
   wallet_risk_ranking: 25,
-  wallet_conviction_ranking: 25,
   wallet_position_summary: 50,
   wallet_unlock_risk: 50,
   position_current_state: 50,
@@ -57,6 +55,49 @@ function toNumber(value, fallback = 0) {
 
 function severity(row) {
   return toNumber(row.severity);
+}
+
+function integerLike(value) {
+  try {
+    return BigInt(String(value ?? 0));
+  } catch {
+    return 0n;
+  }
+}
+
+function projectWalletRiskRows(rows) {
+  return rows.slice(0, 5).map((row) => ({
+    wallet: row.wallet ?? null,
+    chainId: row.chainId ?? null,
+    riskScore: row.riskScore ?? null,
+    activeLockedAmount: row.activeLockedAmount ?? null,
+    unlocking24hAmount: row.unlocking24hAmount ?? null,
+    unlocking7dAmount: row.unlocking7dAmount ?? null,
+  }));
+}
+
+function projectLargestLockedBalanceRows(rows) {
+  return [...rows]
+    .sort((a, b) => {
+      const left = integerLike(a.lockedNara);
+      const right = integerLike(b.lockedNara);
+      return left === right ? 0 : left > right ? -1 : 1;
+    })
+    .slice(0, 5)
+    .map((row) => ({
+      wallet: row.wallet ?? null,
+      chainId: row.chainId ?? null,
+      ownerStatus: row.ownerStatus ?? null,
+      rawPositionCount: row.rawPositionCount ?? null,
+      nftPositionCount: row.nftPositionCount ?? null,
+      lockedNara: row.lockedNara ?? null,
+      rawLockedNara: row.rawLockedNara ?? null,
+      nftLockedNara: row.nftLockedNara ?? null,
+      activeWeight: row.activeWeight ?? null,
+      unlockingSoon24hNara: row.unlockingSoon24hNara ?? null,
+      unlockingSoon7dNara: row.unlockingSoon7dNara ?? null,
+      positionCount: row.positionCount ?? null,
+    }));
 }
 
 function rowValue(row, key) {
@@ -216,9 +257,9 @@ export function buildCommanderReport(rawInputs, options = {}) {
   };
 
   const walletActivity = {
-    sourceViews: ["wallet_risk_ranking", "wallet_conviction_ranking", "wallet_position_summary", "wallet_unlock_risk"],
-    topRiskWallets: (inputs.wallet_risk_ranking ?? []).slice(0, 5),
-    topConvictionWallets: (inputs.wallet_conviction_ranking ?? []).slice(0, 5),
+    sourceViews: ["wallet_risk_ranking", "wallet_position_summary", "wallet_unlock_risk"],
+    topRiskWallets: projectWalletRiskRows(inputs.wallet_risk_ranking ?? []),
+    largestLockedBalanceRows: projectLargestLockedBalanceRows(inputs.wallet_position_summary ?? []),
     walletPositionSummaryRows: (inputs.wallet_position_summary ?? []).length,
     walletUnlockRiskRows: (inputs.wallet_unlock_risk ?? []).length,
   };
@@ -389,7 +430,7 @@ export function formatCommanderReport(report) {
     `Failed transaction activity: ${JSON.stringify(report.failedTxActivity)}`,
     `Risk summary: ${JSON.stringify(report.riskSummary)}`,
     "",
-    "Recommended next actions:",
+    "Operator response steps:",
     actions,
     "",
     `Decision required: ${report.requiresHumanDecision ? "yes" : "no"}`,
@@ -414,11 +455,21 @@ export async function generateCommanderReport(reader, options = {}) {
   return buildCommanderReport(inputs, options);
 }
 
+export function commanderViewSql(viewName, limit) {
+  if (!COMMANDER_VIEW_NAMES.includes(viewName)) throw new Error(`Unsupported Commander view: ${viewName}`);
+  const boundedLimit = Math.max(1, Math.min(limit, 250));
+  const orderBy = viewName === "wallet_position_summary"
+    ? ' order by "lockedNara" desc'
+    : viewName === "wallet_risk_ranking"
+      ? ' order by "riskScore" desc'
+      : "";
+  return `select * from ${viewName}${orderBy} limit ${boundedLimit}`;
+}
+
 export function createPonderSqlCommanderReader(baseUrl = (process.env.COMMANDER_SQL_URL || "http://localhost:42069/sql").replace(/\/$/, "")) {
   return {
     async readView(viewName, limit) {
-      if (!COMMANDER_VIEW_NAMES.includes(viewName)) throw new Error(`Unsupported Commander view: ${viewName}`);
-      const sql = `select * from ${viewName} limit ${Math.max(1, Math.min(limit, 250))}`;
+      const sql = commanderViewSql(viewName, limit);
       const query = encodeURIComponent(superjson.stringify(ponderSqlQuery(sql)));
       const response = await fetch(`${baseUrl}/db?sql=${query}`);
       if (!response.ok) throw new Error(`Ponder SQL query failed (${response.status}): ${await response.text()}`);

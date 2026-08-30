@@ -88,10 +88,20 @@ async function storeCommanderReport(report: CommanderReport): Promise<void> {
 export function createPonderSqlCommanderReader(baseUrl = sqlEndpoint()): CommanderReader {
   return {
     async readView(viewName, limit) {
-      assertCommanderViewName(viewName);
-      return queryPonderSql(baseUrl, `select * from ${viewName} limit ${Math.max(1, Math.min(limit, 250))}`);
+      return queryPonderSql(baseUrl, commanderViewSql(viewName, limit));
     },
   };
+}
+
+export function commanderViewSql(viewName: string, limit: number): string {
+  assertCommanderViewName(viewName);
+  const boundedLimit = Math.max(1, Math.min(limit, 250));
+  const orderBy = viewName === "wallet_position_summary"
+    ? ' order by "lockedNara" desc'
+    : viewName === "wallet_risk_ranking"
+      ? ' order by "riskScore" desc'
+      : "";
+  return `select * from ${viewName}${orderBy} limit ${boundedLimit}`;
 }
 
 export async function runCommanderCli(): Promise<void> {
