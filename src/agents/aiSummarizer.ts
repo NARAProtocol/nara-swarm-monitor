@@ -136,7 +136,7 @@ export function commanderReportFromStoredRow(row: CommanderReportStoredRow): Com
 }
 
 function actionText(actions: string[]): string {
-  if (actions.length === 0) return "No recommended actions were provided by the Commander report.";
+  if (actions.length === 0) return "No operator response steps were provided by the Commander report.";
   return actions.map((action) => `- ${action}`).join("\n");
 }
 
@@ -226,11 +226,10 @@ export function formatAiSummary(summary: AiSummaryRow): string {
     "",
     summary.summaryText,
     "",
-    "Recommended actions:",
+    "Operator response steps:",
     summary.recommendedActionsText,
     "",
     `Input hash: ${summary.inputHash}`,
     `Output hash: ${summary.outputHash}`,
   ].join("\n");
 }
-

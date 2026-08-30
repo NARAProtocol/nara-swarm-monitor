@@ -51,9 +51,14 @@ Use this checklist before starting or restarting the monitor stack.
   - [ ] `V4_FINAL_ADMIN`
   - [ ] `DEPLOYER_ADDRESS`
 
-The `core` profile is the current production-compatible monitor scope. The
+The `core` profile is the current deployed-core observation scope. The
 `full` profile remains fail-closed while deferred contracts are absent. Do not
 invent addresses or deploy unrelated components to satisfy it.
+
+The Position NFT Phase-2 baseline is deployed, tested under its recorded
+release gates, source-verified, and Safe-finalized. It remains outside `core`
+because its canonical manifest records `integrationReady: false`; do not
+confuse deployment with consumer-integration authority.
 
 ## Address Safety
 

@@ -8,6 +8,11 @@ The monitor is read-only with respect to protocol state. It indexes logs and
 traces, scans receipts, builds deterministic reports, summarizes those reports,
 and sends operator-facing notifications.
 
+The underlying v4 core and canonical pool use real assets in a technical live-
+testing phase. Monitor output is operational telemetry, not investment
+research, a trading signal, personalized advice, a public-availability claim,
+or legal approval.
+
 ## Prerequisites
 
 - Node.js 18.14 or newer.
@@ -219,7 +224,8 @@ a BaseScan transaction link.
 The watcher is read-only. Its Postgres cursor and unique transaction/log-index
 delivery ID prevent restart replays. It advances the cursor only after every
 qualifying notification in the range succeeds, uses configured RPC failover,
-and never logs provider URLs or Telegram credentials. Test Telegram routing
+and never logs provider URLs or Telegram credentials. It is an operator alert,
+not a trading signal. Test Telegram routing
 without creating a fake buy record with:
 
 ```bash

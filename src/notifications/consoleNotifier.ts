@@ -21,7 +21,7 @@ export function formatNotificationPayload(payload: NotificationPayload): string 
     `Source report: ${payload.sourceReportId}`,
     `Created at: ${payload.createdAt}`,
     "",
-    "Recommended actions:",
+    "Operator response steps:",
     actions,
     "",
     "Evidence:",

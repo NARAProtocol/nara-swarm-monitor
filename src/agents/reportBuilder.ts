@@ -96,6 +96,49 @@ function protocolRiskRow(inputs: CommanderInputs): CommanderRow {
   return inputs.protocol_risk_summary[0] ?? {};
 }
 
+function integerLike(value: unknown): bigint {
+  try {
+    return BigInt(String(value ?? 0));
+  } catch {
+    return 0n;
+  }
+}
+
+function projectWalletRiskRows(rows: CommanderRow[]): CommanderRow[] {
+  return rows.slice(0, 5).map((row) => ({
+    wallet: row.wallet ?? null,
+    chainId: row.chainId ?? null,
+    riskScore: row.riskScore ?? null,
+    activeLockedAmount: row.activeLockedAmount ?? null,
+    unlocking24hAmount: row.unlocking24hAmount ?? null,
+    unlocking7dAmount: row.unlocking7dAmount ?? null,
+  }));
+}
+
+function projectLargestLockedBalanceRows(rows: CommanderRow[]): CommanderRow[] {
+  return [...rows]
+    .sort((a, b) => {
+      const left = integerLike(a.lockedNara);
+      const right = integerLike(b.lockedNara);
+      return left === right ? 0 : left > right ? -1 : 1;
+    })
+    .slice(0, 5)
+    .map((row) => ({
+      wallet: row.wallet ?? null,
+      chainId: row.chainId ?? null,
+      ownerStatus: row.ownerStatus ?? null,
+      rawPositionCount: row.rawPositionCount ?? null,
+      nftPositionCount: row.nftPositionCount ?? null,
+      lockedNara: row.lockedNara ?? null,
+      rawLockedNara: row.rawLockedNara ?? null,
+      nftLockedNara: row.nftLockedNara ?? null,
+      activeWeight: row.activeWeight ?? null,
+      unlockingSoon24hNara: row.unlockingSoon24hNara ?? null,
+      unlockingSoon7dNara: row.unlockingSoon7dNara ?? null,
+      positionCount: row.positionCount ?? null,
+    }));
+}
+
 function recommendedActionsFor(status: CommanderStatus, inputs: CommanderInputs): string[] {
   if (status === "RED") {
     return [
@@ -151,9 +194,9 @@ export function buildCommanderReport(
   };
 
   const walletActivity = {
-    sourceViews: ["wallet_risk_ranking", "wallet_conviction_ranking", "wallet_position_summary", "wallet_unlock_risk"],
-    topRiskWallets: inputs.wallet_risk_ranking.slice(0, 5),
-    topConvictionWallets: inputs.wallet_conviction_ranking.slice(0, 5),
+    sourceViews: ["wallet_risk_ranking", "wallet_position_summary", "wallet_unlock_risk"],
+    topRiskWallets: projectWalletRiskRows(inputs.wallet_risk_ranking),
+    largestLockedBalanceRows: projectLargestLockedBalanceRows(inputs.wallet_position_summary),
     walletPositionSummaryRows: inputs.wallet_position_summary.length,
     walletUnlockRiskRows: inputs.wallet_unlock_risk.length,
   };
@@ -266,7 +309,7 @@ export function formatCommanderReport(report: CommanderReport): string {
     `Failed transaction activity: ${JSON.stringify(report.failedTxActivity)}`,
     `Risk summary: ${JSON.stringify(report.riskSummary)}`,
     "",
-    "Recommended next actions:",
+    "Operator response steps:",
     actions,
     "",
     `Decision required: ${report.requiresHumanDecision ? "yes" : "no"}`,
@@ -275,4 +318,3 @@ export function formatCommanderReport(report: CommanderReport): string {
     evidence,
   ].join("\n");
 }
-

@@ -67,9 +67,9 @@ function commanderRow(overrides = {}) {
 {
   const summary = await buildAiSummary(commanderRow(), { provider: localStubProvider, createdAt });
   for (const action of actions) {
-    assert.equal(summary.recommendedActionsText.includes(action), true, "recommended actions are copied");
+    assert.equal(summary.recommendedActionsText.includes(action), true, "operator response steps are copied");
   }
-  assert.equal(summary.recommendedActionsText.includes("send transaction"), false, "recommended actions are not invented");
+  assert.equal(summary.recommendedActionsText.includes("send transaction"), false, "operator response steps are not invented");
 }
 
 {
@@ -100,4 +100,3 @@ function commanderRow(overrides = {}) {
 }
 
 console.log("Seeded AI summarizer tests passed.");
-

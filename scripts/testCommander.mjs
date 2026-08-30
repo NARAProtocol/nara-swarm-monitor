@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {
   DEFAULT_COMMANDER_INPUTS,
   buildCommanderReport,
+  commanderViewSql,
   commanderReportToRow,
 } from "./commanderRuntime.mjs";
 
@@ -86,6 +87,27 @@ function alert(severity, ruleId, extra = {}) {
 }
 
 {
+  const rows = Array.from({ length: 60 }, (_, index) => ({
+    wallet: `0x${String(index + 1).padStart(40, "0")}`,
+    lockedNara: String(index === 59 ? 10_000 : index),
+  }));
+  const report = buildCommanderReport(inputs({
+    wallet_risk_ranking: [{ wallet, riskScore: 9, activeLockedAmount: "100", convictionScore: 10 }],
+    wallet_position_summary: rows,
+  }), { chainId, createdAt: fixedTime });
+
+  assert.equal(report.walletActivity.largestLockedBalanceRows[0].wallet, rows[59].wallet, "largest locked balance is selected even when it follows the first 50 rows");
+  const serialized = JSON.stringify(report.walletActivity);
+  assert.doesNotMatch(serialized, /conviction/i, "investment-style conviction fields are not exposed");
+  assert.doesNotMatch(serialized, /walletType|whale/i, "promotional wallet type labels are not exposed");
+  assert.match(
+    commanderViewSql("wallet_position_summary", 50),
+    /order by "lockedNara" desc limit 50$/,
+    "largest locked balance query orders before applying its limit",
+  );
+}
+
+{
   const cliff = { wallet, positionId: 7n, amount: 2000n, estimatedUnlockTimestamp: fixedTime + 3600 };
   const report = buildCommanderReport(inputs({
     unlock_cliffs_24h: [cliff],
@@ -126,4 +148,3 @@ function alert(severity, ruleId, extra = {}) {
 }
 
 console.log("Seeded Commander v1 tests passed.");
-

@@ -30,7 +30,9 @@ print key names and whether a key is present.
   contains another Ponder app.
 
 `V4_START_BLOCK`
-: Fresh v4 deployment start block. Must be a positive integer.
+: Fresh v4 deployment scan start. The current verified deployment evidence
+  records `49718979`; verify this against the pinned manifest before changing
+  it. Must be a positive integer.
 
 `V4_EPOCH_LENGTH_SECONDS`
 : Deployed engine epoch length in seconds. Do not assume the default unless the
@@ -85,8 +87,10 @@ retired incident-stack addresses.
 : Fresh active v4 `NARAEngine`.
 
 `V4_POSITION_NFT`
-: Fresh active v4 `NARAPositionNFTV4`; leave unset in the core profile until an
-  integration-ready manifest and downstream handoff exist.
+: Deployed, tested under its recorded release gates, source-verified, and
+  Safe-finalized v4 `NARAPositionNFTV4`. Leave it unset in the core profile
+  while the canonical manifest records `integrationReady: false`; an immutable
+  integration-ready handoff is still required.
 
 `V4_BOND_DEPOSITORY_NFT`
 : Fresh active v4 `NARABondDepositoryV4NFT`, the NFT launch-path depository.
@@ -198,6 +202,9 @@ stored in `notification_deliveries`.
 
 `LARGE_BUY_ALERT_ENABLED`
 : Enables the independent read-only canonical NARA/USDC large-buy watcher.
+  Keep it `false` until the verified pool, currencies, Telegram destination,
+  and first future activation block are all configured. Its output is operator
+  telemetry, not a trading signal.
 
 `LARGE_BUY_ALERT_MIN_USDC`
 : Gross USDC input threshold with up to six decimals. Production uses `100`.

@@ -61,6 +61,29 @@ The monitor exists only for the fresh NARA v4 redeploy from:
 
 `../nara-protocol-hardhat/contracts/v4/`
 
+## Current Documentation Handoff
+
+Cold AI agents must use change ID
+`NARA-20260830-documentation-convergence` without rediscovering repository
+ownership or current deployment language:
+
+- protocol origin: `NARAProtocol/nara_protocol_v4` protected `main` commit
+  `dae88079dd336e22bdefde6f45e3b01389d554cb`;
+- baskets origin: `NARAProtocol/nara_protocol_v4_baskets` protected `main`
+  commit `2213f4a7e9fe3af984fc4b157d92169c91b015a0`;
+- active Base NARA token:
+  `0xB6333F5D4cEd8dffA80F3F13697D6aA3BB3f19c1`;
+- the canonical NARA/USDC pool is live with real assets in a technical live-
+  testing phase; this is not a claim that a public product or every interface
+  is available;
+- the Position NFT Phase-2 baseline is deployed, tested under its recorded
+  release gates, source-verified, and Safe-finalized, but its canonical
+  manifest still has `integrationReady: false`; and
+- baskets remain undeployed and preview-only.
+
+Changing facts still come from the pinned manifests and release evidence, not
+from this summary. Do not use the historical `0x65E...` token as current.
+
 Before changing monitor logic, read:
 
 - `../AGENTS.md`
@@ -111,10 +134,18 @@ Use active v4 concepts only:
 - The current Ponder configuration supports `MONITOR_PROFILE=core` for the
   deployed token, engine, liquidity hook, vault, and compounder.
 - Do not invent or reuse addresses to make the full profile boot.
-- The public launch scope is baskets only. A dedicated baskets/core profile is
-  required after basket manager and fee collector addresses are deployed.
-- Do not deploy deferred position NFT, bond, router, lockboard, or composability
-  surfaces merely to satisfy the indexer.
+- The deployed core and canonical pool are in technical live testing with real
+  assets. Monitoring them does not establish public product availability,
+  production readiness, safety, legal approval, or availability in any
+  jurisdiction.
+- The Position NFT deployment is real, tested, source-verified, and
+  Safe-finalized. Leave it unconnected because the canonical manifest remains
+  `integrationReady: false`; deployment alone is not downstream integration
+  authority.
+- Do not deploy bond, router, lockboard, composability, or other deferred
+  surfaces merely to satisfy the indexer. A dedicated basket profile is
+  required only after verified basket manager and fee collector deployments
+  and an immutable downstream handoff exist.
 
 ## AI Boundaries
 
@@ -124,11 +155,14 @@ Use active v4 concepts only:
 - AI cannot create alerts.
 - AI cannot resolve alerts.
 - AI cannot change wallet or position scores.
-- AI cannot execute recommendations.
+- AI cannot execute operator response steps or investment decisions.
 - AI cannot send transactions.
 - AI cannot call contracts.
 - AI cannot post publicly unless a future notification output is explicitly
   added and approved.
+- Monitor alerts, scores, reports, and summaries are operational telemetry.
+  They must never be framed as investment research, trading signals,
+  personalized advice, asset rankings, or recommendations to transact.
 
 ## Explicitly Out Of Scope Unless Rebuilt For v4
 

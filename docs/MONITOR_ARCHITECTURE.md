@@ -19,6 +19,13 @@ active v4 contracts
 
 The monitor never sends transactions and never holds private keys.
 
+The deployed v4 core and canonical NARA/USDC pool are in technical live testing
+with real assets. This observation layer does not establish public product
+availability, production readiness, safety, legal approval, or availability in
+any jurisdiction. Its outputs are operational telemetry, not investment
+research, trading signals, personalized advice, or recommendations to
+transact.
+
 ## Active Inputs
 
 Fresh v4 addresses are supplied through environment variables. The monitor fails
@@ -165,7 +172,7 @@ The AI summarizer may not:
 - change scores
 - lower severity
 - invent evidence
-- execute recommendations
+- execute operator response steps or investment decisions
 - send transactions
 - call contracts
 - post publicly

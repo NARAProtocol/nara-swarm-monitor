@@ -1,6 +1,16 @@
-# 🚀 Deploying NARA Swarm Monitor on Railway (Under 2 Minutes)
+# Deploying NARA Swarm Monitor on Railway
 
-This step-by-step guide walks you through deploying **NARA Swarm Monitor** with a managed PostgreSQL database on Railway for **`~$5 / month`**.
+This guide covers a read-only operator deployment of **NARA Swarm Monitor**
+with a managed PostgreSQL database on Railway. Hosting time and cost depend on
+the selected Railway and RPC plans.
+
+> [!WARNING]
+> The monitored v4 core and canonical NARA/USDC pool use real assets in a
+> technical live-testing phase. A hosted monitor is not evidence of public
+> product availability, production readiness, safety, legal approval, or
+> availability in any jurisdiction. Its alerts and wallet reports are
+> operational telemetry, not investment research, trading signals,
+> personalized advice, or recommendations to transact.
 
 ---
 
@@ -34,7 +44,7 @@ BASE_RPC_URL=https://base-mainnet.g.alchemy.com/v2/YOUR_KEY
 DATABASE_SCHEMA=nara_v4_monitor
 COMMANDER_SQL_URL=http://127.0.0.1:8080/sql
 API_PORT=8080
-V4_START_BLOCK=49719008
+V4_START_BLOCK=49718979
 V4_EPOCH_LENGTH_SECONDS=900
 V4_MAX_EPOCH_BACKLOG=1
 V4_EPOCH_CRITICAL_BACKLOG=5
@@ -55,7 +65,7 @@ DEPLOYER_ADDRESS=0xAE9D1667B45558232BeD9d45DcCA53940F892aB5
 NOTIFY_CHANNELS=telegram,console
 TELEGRAM_BOT_TOKEN=YOUR_BOT_TOKEN
 TELEGRAM_CHAT_ID=YOUR_CHAT_ID
-LARGE_BUY_ALERT_ENABLED=true
+LARGE_BUY_ALERT_ENABLED=false
 LARGE_BUY_ALERT_MIN_USDC=100
 LARGE_BUY_ALERT_START_BLOCK=FIRST_FUTURE_BASE_BLOCK_AT_ACTIVATION
 LARGE_BUY_ALERT_POLL_SECONDS=10
@@ -72,7 +82,10 @@ The large-buy watcher reads only the canonical Hook's `PoolFeeTaken` event. It
 requires the verified pool ID and USDC address, persists a block cursor and
 delivery records in Postgres, retries failed sends, and waits two Base blocks
 before notifying. Set `LARGE_BUY_ALERT_START_BLOCK` to the first future block
-when enabling it so historical buys cannot generate Telegram alerts.
+when enabling it so historical buys cannot generate Telegram alerts. Keep
+`LARGE_BUY_ALERT_ENABLED=false` until the pool, currencies, Telegram
+destination, and future activation block are all verified. This operator alert
+is not a trading signal.
 
 For an existing production schema, a runtime-only deployment may set
 `PONDER_EXPERIMENTAL_DB=platform` only after confirming that
@@ -88,19 +101,23 @@ downstream handoff explicitly enable that surface.
 #### Step 4: Link Telegram Bot
 1. Open Telegram and search for your bot username (or click your bot's link).
 2. Tap **Start** (or send `/start`).
-3. The bot will automatically register the native **Menu** button (`/wallet`, `/health`, `/whales`, `/cliffs`, `/status`, `/contracts`, `/ping`) and link your chat for 24/7 security alerts!
+3. The bot registers the native **Menu** button (`/wallet`, `/health`,
+   `/whales`, `/cliffs`, `/status`, `/contracts`, `/ping`) and routes operator
+   alerts while the configured service is running.
 
-#### Step 5: Generate Public Domain (Optional — For GraphQL Explorer & API Access)
+#### Step 5: Configure Controlled Network Access (Optional)
 1. Go to the **"Settings"** tab of the `nara-swarm-monitor` service on Railway.
 2. Under **"Networking"**, click **"Generate Domain"**.
-3. You now have a live HTTPS endpoint (e.g. `https://nara-swarm-monitor-production.up.railway.app`) serving live GraphQL (`/graphql`) and REST queries!
+3. Treat the generated HTTPS endpoint as operator infrastructure. Before
+   exposing GraphQL or REST outside the operator boundary, complete a separate
+   access-control, data-exposure, security, and communications review.
 
 ---
 
 ### 🔍 How to Verify It's Running
 1. Click the **"Deployments"** tab on Railway and open **"View Logs"**.
 2. You will see:
-   * **Ponder Indexer:** Syncing events and live blocks on Base from block `49719008`.
+   * **Ponder Indexer:** Syncing events and live blocks on Base from block `49718979`.
    * **Telegram Console:** `🤖 Telegram bot command listener started with Menu registered...`
    * **Epoch Sentinel:** Reading Base independently every 5 minutes (`300s`), warning at backlog 2 and paging at backlog 5.
    * **Autonomous Swarm Scheduler:** Running the broader 5-step diagnostic cycle every 10 minutes (`600s`).

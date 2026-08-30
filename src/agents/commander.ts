@@ -12,7 +12,6 @@ export const COMMANDER_VIEW_NAMES = [
   "critical_alerts",
   "protocol_risk_summary",
   "wallet_risk_ranking",
-  "wallet_conviction_ranking",
   "wallet_position_summary",
   "wallet_unlock_risk",
   "position_current_state",
@@ -38,7 +37,6 @@ const DEFAULT_LIMITS: Record<CommanderViewName, number> = {
   critical_alerts: 50,
   protocol_risk_summary: 1,
   wallet_risk_ranking: 25,
-  wallet_conviction_ranking: 25,
   wallet_position_summary: 50,
   wallet_unlock_risk: 50,
   position_current_state: 50,
@@ -71,4 +69,3 @@ export async function generateCommanderReport(
   const inputs = await readCommanderInputs(reader);
   return buildCommanderReport(inputs, options);
 }
-
