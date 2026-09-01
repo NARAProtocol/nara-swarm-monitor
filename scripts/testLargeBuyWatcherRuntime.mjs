@@ -42,9 +42,9 @@ const message = buildLargeBuyTelegramMessage({
   blockNumber: 123n,
   transactionHash: `0x${"ab".repeat(32)}`,
 });
-assert.match(message, /NARA LARGE BUY/);
+assert.match(message, /NARA POOL BUY DETECTED/);
 assert.match(message, /100 USDC/);
-assert.match(message, /3 USDC \(300 BPS\)/);
+assert.match(message, /3 USDC \(3\.00%\)/);
 assert.match(message, /basescan\.org\/tx/);
 
 const generatedAbi = readFileSync("abis/NARALiquidityGrowthHookAbi.ts", "utf8");
