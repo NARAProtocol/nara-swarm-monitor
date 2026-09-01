@@ -36,21 +36,28 @@ export function largeBuyDeliveryId(chainId, transactionHash, logIndex) {
 }
 
 export function buildLargeBuyTelegramMessage(details) {
+  const shortBuyer = `${details.buyer.slice(0, 6)}...${details.buyer.slice(-4)}`;
+  const feePct = (Number(details.feeBps) / 100).toFixed(2);
   return [
-    "🐋 NARA LARGE BUY",
-    `Buy size: ${formatUsdc(details.amountIn)} USDC`,
-    `Buyer: ${details.buyer}`,
-    `Hook fee: ${formatUsdc(details.feeAmount)} USDC (${details.feeBps} BPS)`,
-    `Block: ${details.blockNumber}`,
-    `Transaction: https://basescan.org/tx/${details.transactionHash}`,
+    "🟢 🐋 NARA POOL BUY DETECTED",
+    "━━━━━━━━━━━━━━━━━━━━",
+    `💵 Amount In: ${formatUsdc(details.amountIn)} USDC`,
+    `🛡️ Hook Fee: ${formatUsdc(details.feeAmount)} USDC (${feePct}%)`,
+    `👤 Buyer: ${shortBuyer}`,
+    `🧱 Block: #${details.blockNumber}`,
+    "━━━━━━━━━━━━━━━━━━━━",
+    `🔗 BaseScan: https://basescan.org/tx/${details.transactionHash}`,
   ].join("\n");
 }
 
 export function buildLargeBuyTestMessage(options) {
   return [
-    "✅ NARA large-buy alert test",
-    `Threshold: ${formatUsdc(options.minimumUsdcRaw)} USDC`,
-    `Monitoring from Base block: ${options.startBlock}`,
-    "Future canonical NARA/USDC buys at or above the threshold will trigger an alert.",
+    "🟢 🧪 NARA BUY ALERT TEST",
+    "━━━━━━━━━━━━━━━━━━━━",
+    `📊 Threshold: ${formatUsdc(options.minimumUsdcRaw)} USDC`,
+    `🧱 Start Block: #${options.startBlock}`,
+    "✅ Status: Live & Listening on Base Mainnet",
+    "━━━━━━━━━━━━━━━━━━━━",
+    "All future Uniswap v4 buys at or above the threshold will trigger an instant alert.",
   ].join("\n");
 }
