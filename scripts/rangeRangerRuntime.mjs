@@ -379,3 +379,128 @@ export function buildRangeRangerTelegramAlert({
     "\u{1F449} Import JSON into Safe Transaction Builder to execute everything in 1 single transaction.",
   ].join("\n");
 }
+
+export async function executeAutonomousSafeBatch({
+  publicClient,
+  walletClient,
+  safeAddress = TREASURY_SAFE_ADDRESS,
+  transactions,
+}) {
+  const MULTISEND_CALL_ONLY = "0x40A2aCCbd92BCA938b02010E17A5b8929b49130D";
+
+  let packed = "0x";
+  for (const tx of transactions) {
+    const op = "00";
+    const to = tx.to.toLowerCase().replace("0x", "");
+    const val = BigInt(tx.value || 0).toString(16).padStart(64, "0");
+    const dataBytes = tx.data.replace("0x", "");
+    const dataLen = (dataBytes.length / 2).toString(16).padStart(64, "0");
+    packed += op + to + val + dataLen + dataBytes;
+  }
+
+  const multiSendData = encodeFunctionData({
+    abi: parseAbi(["function multiSend(bytes transactions)"]),
+    functionName: "multiSend",
+    args: [packed],
+  });
+
+  const nonce = await publicClient.readContract({
+    address: safeAddress,
+    abi: parseAbi(["function nonce() view returns (uint256)"]),
+    functionName: "nonce",
+  });
+
+  const domain = { chainId: 8453, verifyingContract: safeAddress };
+  const types = {
+    SafeTx: [
+      { name: "to", type: "address" },
+      { name: "value", type: "uint256" },
+      { name: "data", type: "bytes" },
+      { name: "operation", type: "uint8" },
+      { name: "safeTxGas", type: "uint256" },
+      { name: "baseGas", type: "uint256" },
+      { name: "gasPrice", type: "uint256" },
+      { name: "gasToken", type: "address" },
+      { name: "refundReceiver", type: "address" },
+      { name: "nonce", type: "uint256" },
+    ],
+  };
+  const message = {
+    to: MULTISEND_CALL_ONLY,
+    value: 0n,
+    data: multiSendData,
+    operation: 1, // DelegateCall
+    safeTxGas: 0n,
+    baseGas: 0n,
+    gasPrice: 0n,
+    gasToken: "0x0000000000000000000000000000000000000000",
+    refundReceiver: "0x0000000000000000000000000000000000000000",
+    nonce: nonce,
+  };
+
+  const signature = await walletClient.signTypedData({
+    account: walletClient.account,
+    domain,
+    types,
+    primaryType: "SafeTx",
+    message,
+  });
+
+  const SAFE_EXEC_ABI = parseAbi([
+    "function execTransaction(address to, uint256 value, bytes data, uint8 operation, uint256 safeTxGas, uint256 baseGas, uint256 gasPrice, address gasToken, address refundReceiver, bytes signatures) payable returns (bool)",
+  ]);
+
+  const hash = await walletClient.writeContract({
+    address: safeAddress,
+    abi: SAFE_EXEC_ABI,
+    functionName: "execTransaction",
+    args: [
+      message.to,
+      message.value,
+      message.data,
+      message.operation,
+      message.safeTxGas,
+      message.baseGas,
+      message.gasPrice,
+      message.gasToken,
+      message.refundReceiver,
+      signature,
+    ],
+    gas: 7_500_000n,
+  });
+
+  const receipt = await publicClient.waitForTransactionReceipt({ hash });
+  return { hash, receipt, nonce };
+}
+
+export function buildAutonomousSuccessTelegramAlert({
+  reason,
+  analysis,
+  buyBands = [],
+  sellBands = [],
+  staleOrders = [],
+  safeUsdcBalance,
+  txHash,
+  blockNumber,
+  gasUsed,
+}) {
+  const buyTotal = buyBands.reduce((s, b) => s + b.usdcBudget, 0);
+  const sellTotal = sellBands.reduce((s, b) => s + b.naraBudget, 0);
+  const div = "\u2501".repeat(20);
+
+  return [
+    "\u{1F3F9} \u{26A1} [RANGE RANGER: AUTONOMOUS REBALANCE CONFIRMED]",
+    div,
+    `\u{1F4CA} Trigger: ${reason}`,
+    `\u{1F4B0} Current Spot: $${analysis.spotPrice.toFixed(4)} USDC`,
+    `\u{1F517} Tx: https://basescan.org/tx/${txHash}`,
+    `\u{1F9F1} Confirmed in Block #${blockNumber} (Gas Used: ${gasUsed.toString()})`,
+    div,
+    `\u{1F5D1}\u{FE0F} Cancelled & Settled: ${staleOrders.length} stale orders`,
+    `\u{1F7E2} Deployed 4 Buy Bands ($${buyTotal} USDC)`,
+    `\u{1F534} Deployed 4 Sell Bands (${sellTotal} NARA)`,
+    `\u{1F3E6} Treasury Safe Available: $${formatUsdcNumber(Number(safeUsdcBalance) / 1e6)} USDC`,
+    div,
+    "\u2705 Order book is now perfectly centered around live market price.",
+  ].join("\n");
+}
