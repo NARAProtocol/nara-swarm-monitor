@@ -21,6 +21,7 @@ let shuttingDown = false;
 let ponder;
 let bot;
 let largeBuyWatcher;
+let rangeRangerWatcher;
 
 function scheduleRestart(label, start) {
   if (shuttingDown) return;
@@ -97,6 +98,30 @@ if (["true", "1"].includes(String(process.env.LARGE_BUY_ALERT_ENABLED || "false"
     });
   };
   startLargeBuyWatcher();
+}
+
+// 4. Independent Range Ranger market structure & tactical rebalance watcher.
+if (["true", "1"].includes(String(process.env.RANGE_RANGER_ALERT_ENABLED || "false").toLowerCase())) {
+  const startRangeRanger = () => {
+    let stopped = false;
+    const handleStop = () => {
+      if (stopped) return;
+      stopped = true;
+      rangeRangerWatcher = undefined;
+      scheduleRestart("Range Ranger watcher", startRangeRanger);
+    };
+    console.log("🏹 Starting Range Ranger market structure & tactical rebalance watcher...");
+    rangeRangerWatcher = spawn(process.execPath, ["scripts/rangeRangerWatcher.mjs"], {
+      stdio: "inherit",
+      env: runtimeEnv,
+    });
+    rangeRangerWatcher.on("exit", handleStop);
+    rangeRangerWatcher.on("error", (error) => {
+      console.error("Range Ranger failed to start:", error.message);
+      handleStop();
+    });
+  };
+  startRangeRanger();
 }
 
 // 4. Independent epoch sentinel. It has no Ponder, database, Commander, or
@@ -176,6 +201,7 @@ for (const signal of ["SIGINT", "SIGTERM"]) {
     ponder?.kill("SIGTERM");
     bot?.kill("SIGTERM");
     largeBuyWatcher?.kill("SIGTERM");
+    rangeRangerWatcher?.kill("SIGTERM");
     process.exit(0);
   });
 }

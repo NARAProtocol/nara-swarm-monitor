@@ -15,3 +15,4 @@ import "./testEpochSentinelRuntime.mjs";
 import "./testLargeBuyWatcherRuntime.mjs";
 import "./testSqlRuntime.mjs";
 import "./testEcosystemAbiDrift.mjs";
+import "./testRangeRangerRuntime.mjs";
