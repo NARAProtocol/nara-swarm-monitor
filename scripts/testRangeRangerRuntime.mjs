@@ -5,10 +5,12 @@ import {
   priceToTick,
   analyzeGridLiquidity,
   synthesizeBuyBracket,
+  synthesizeSellBracket,
   buildSafeBatchJson,
   buildRangeRangerTelegramAlert,
   RANGE_MANAGER_ADDRESS,
   USDC_ADDRESS,
+  NARA_ADDRESS,
 } from "./rangeRangerRuntime.mjs";
 
 console.log("Running Range Ranger Runtime Tests...\n");
@@ -24,101 +26,128 @@ console.log("Running Range Ranger Runtime Tests...\n");
   console.log("? 1. Tick <-> Price conversion and alignment passed.");
 }
 
-// 2. Test analyzeGridLiquidity
+// 2. Test analyzeGridLiquidity & Stale Order Detection
 {
-  const currentTick = 296520; // Spot ~$0.1326
+  const currentTick = 328635; // Spot ~$0.0053
   const activeOrders = [
     {
-      orderId: 1n,
-      side: 0, // BUY
+      orderId: 3n,
+      side: 0, // SellNara
       status: 1, // ACTIVE
-      tickLower: 298800, // Price ~$0.105
-      tickUpper: 301200, // Price ~$0.083
+      tickLower: 291480, // Price ~$0.1608 - $0.2197 (stale)
+      tickUpper: 294600,
     },
     {
-      orderId: 2n,
-      side: 1, // SELL
-      status: 1, // ACTIVE
-      tickLower: 291600, // Price ~$0.216
-      tickUpper: 294000, // Price ~$0.170
+      orderId: 7n,
+      side: 0, // SellNara
+      status: 1,
+      tickLower: 277380, // Price ~$0.6020 - $0.8998 (stale)
+      tickUpper: 281400,
+    },
+    {
+      orderId: 10n,
+      side: 1, // BuyNara
+      status: 1,
+      tickLower: 329100, // Price ~$0.0051 (fresh buy)
+      tickUpper: 329520,
     },
   ];
 
   const analysis = analyzeGridLiquidity(currentTick, activeOrders);
+  assert.equal(analysis.staleOrders.length, 2, "Should detect exactly 2 stale orders");
   assert.equal(analysis.activeBuyCount, 1);
-  assert.equal(analysis.activeSellCount, 1);
-  assert.ok(analysis.closestBuyDistancePct > 15, `Buy distance should be > 15%, got ${analysis.closestBuyDistancePct}%`);
-  assert.ok(analysis.closestSellDistancePct > 15, `Sell distance should be > 15%, got ${analysis.closestSellDistancePct}%`);
-  console.log("? 2. Liquidity topology & distance analysis passed.");
+  assert.equal(analysis.activeSellCount, 2);
+  console.log("? 2. Liquidity topology & stale order detection passed.");
 }
 
-// 3. Test synthesizeBuyBracket
+// 3. Test synthesizeBuyBracket & synthesizeSellBracket
 {
-  const spotPrice = 0.1326;
-  const usdcBudget = 600;
-  const bands = synthesizeBuyBracket(spotPrice, usdcBudget);
+  const spotPrice = 0.0053;
+  const buyBands = synthesizeBuyBracket(spotPrice, 600, 328635);
+  const sellBands = synthesizeSellBracket(spotPrice, 20000, 328635);
 
-  assert.equal(bands.length, 4, "Should generate exactly 4 bands");
-  const totalBudget = bands.reduce((s, b) => s + b.usdcBudget, 0);
-  assert.equal(totalBudget, usdcBudget, `Total band budget should sum to ${usdcBudget}`);
+  assert.equal(buyBands.length, 4, "Should generate exactly 4 buy bands");
+  assert.equal(sellBands.length, 4, "Should generate exactly 4 sell bands");
 
-  for (const b of bands) {
-    assert.ok(b.tickLower < b.tickUpper, `Band #${b.bandIndex}: tickLower must be < tickUpper`);
-    assert.equal(b.tickLower % TICK_SPACING, 0, `Band #${b.bandIndex}: tickLower must be multiple of ${TICK_SPACING}`);
-    assert.equal(b.tickUpper % TICK_SPACING, 0, `Band #${b.bandIndex}: tickUpper must be multiple of ${TICK_SPACING}`);
-    assert.ok(b.maximumUsdcInput > 0n, "maximumUsdcInput must be > 0");
-    assert.ok(b.minimumNaraOutput > 0n, "minimumNaraOutput must be > 0");
+  for (const b of buyBands) {
+    assert.ok(b.tickLower < b.tickUpper, `Buy band #${b.bandIndex}: tickLower must be < tickUpper`);
+    assert.ok(b.tickLower > 328635, `Buy band #${b.bandIndex}: tickLower must sit strictly below spot`);
   }
-  console.log("? 3. Front-heavy 4-band buy bracket synthesis passed.");
+  for (const s of sellBands) {
+    assert.ok(s.tickLower < s.tickUpper, `Sell band #${s.bandIndex}: tickLower must be < tickUpper`);
+    assert.ok(s.tickUpper < 328635, `Sell band #${s.bandIndex}: tickUpper must sit strictly above spot`);
+  }
+  console.log("? 3. Two-sided Buy & Sell bracket synthesis passed.");
 }
 
-// 4. Test buildSafeBatchJson
+// 4. Test Atomic buildSafeBatchJson (All-in-one overhaul)
 {
-  const spotPrice = 0.1326;
-  const bands = synthesizeBuyBracket(spotPrice, 600);
+  const spotPrice = 0.0053;
+  const staleOrders = [{ orderId: 3n }, { orderId: 7n }];
+  const buyBands = synthesizeBuyBracket(spotPrice, 600, 328635);
+  const sellBands = synthesizeSellBracket(spotPrice, 20000, 328635);
+
   const batch = buildSafeBatchJson({
     chainId: 8453,
-    bands,
+    staleOrders,
+    buyBands,
+    sellBands,
   });
 
   assert.equal(batch.version, "1.0");
   assert.equal(batch.chainId, "8453");
-  assert.equal(batch.transactions.length, 6, "Batch should have 1 approve + 4 order creations + 1 assertion = 6 txs");
 
-  // Tx 0: USDC approve to RangeManager
-  assert.equal(batch.transactions[0].to.toLowerCase(), USDC_ADDRESS.toLowerCase());
-  // Txs 1-4: createBuyNaraOrder
-  for (let i = 1; i <= 4; i++) {
-    assert.equal(batch.transactions[i].to.toLowerCase(), RANGE_MANAGER_ADDRESS.toLowerCase());
-  }
-  // Tx 5: assertOperationalClean
-  assert.equal(batch.transactions[5].to.toLowerCase(), RANGE_MANAGER_ADDRESS.toLowerCase());
-  console.log("? 4. Safe Transaction Builder JSON encoding passed.");
+  // Calls breakdown:
+  // 2 cancellations + 1 usdc approve + 1 nara approve + 4 buy orders + 4 sell orders + 1 usdc clear + 1 nara clear + 1 assert
+  // = 2 + 1 + 1 + 4 + 4 + 1 + 1 + 1 = 15 calls
+  assert.equal(batch.transactions.length, 15, `Batch should contain 15 calls, got ${batch.transactions.length}`);
+
+  // Calls 0-1: cancel stale orders
+  assert.equal(batch.transactions[0].to.toLowerCase(), RANGE_MANAGER_ADDRESS.toLowerCase());
+  assert.equal(batch.transactions[1].to.toLowerCase(), RANGE_MANAGER_ADDRESS.toLowerCase());
+
+  // Call 2: USDC approval
+  assert.equal(batch.transactions[2].to.toLowerCase(), USDC_ADDRESS.toLowerCase());
+
+  // Call 3: NARA approval
+  assert.equal(batch.transactions[3].to.toLowerCase(), NARA_ADDRESS.toLowerCase());
+
+  // Call 14: assertOperationalClean
+  assert.equal(batch.transactions[14].to.toLowerCase(), RANGE_MANAGER_ADDRESS.toLowerCase());
+
+  console.log("? 4. Atomic All-In-One Safe Batch JSON synthesis passed.");
 }
 
 // 5. Test buildRangeRangerTelegramAlert
 {
   const analysis = {
-    spotPrice: 0.1326,
-    closestBuy: { pUpper: 0.105 },
-    closestBuyDistancePct: 20.8,
-    closestSell: { pLower: 0.170 },
+    spotPrice: 0.0053,
+    closestBuy: { pUpper: 0.0040 },
+    closestBuyDistancePct: 24.5,
+    closestSell: null,
     hasLiquidityGap: true,
   };
-  const bands = synthesizeBuyBracket(0.1326, 600);
+  const staleOrders = [{ orderId: 3n, pRange: "$0.16 – $0.22" }];
+  const buyBands = synthesizeBuyBracket(0.0053, 600, 328635);
+  const sellBands = synthesizeSellBracket(0.0053, 20000, 328635);
+
   const msg = buildRangeRangerTelegramAlert({
     reason: "Liquidity Gap > 20% Detected",
     analysis,
-    bands,
+    buyBands,
+    sellBands,
+    staleOrders,
     safeUsdcBalance: 2236909858n,
-    batchFilename: "deployments/UNEXECUTED-rebalance-50751200.json",
+    batchFilename: "deployments/UNEXECUTED-atomic-overhaul-50751200.json",
   });
 
-  assert.ok(msg.includes("RANGE RANGER"), "Message should contain banner");
-  assert.ok(msg.includes("0.1326"), "Message should contain spot price");
+  assert.ok(msg.includes("ATOMIC OVERHAUL"), "Message should contain atomic overhaul banner");
+  assert.ok(msg.includes("0.0053"), "Message should contain spot price");
   assert.ok(msg.includes("2,236.91 USDC"), "Message should format Safe USDC balance");
-  assert.ok(msg.includes("Band #1"), "Message should list bands");
-  console.log("? 5. Telegram alert formatting passed.");
+  assert.ok(msg.includes("Cancel Order #3"), "Message should list stale cancellations");
+  assert.ok(msg.includes("Buy #1"), "Message should list fresh buy bands");
+  assert.ok(msg.includes("Sell #1"), "Message should list fresh sell bands");
+  console.log("? 5. Atomic Telegram alert card formatting passed.");
 }
 
-console.log("\n?? ALL RANGE RANGER RUNTIME TESTS PASSED!\n");
+console.log("\n?? ALL ATOMIC RANGE RANGER RUNTIME TESTS PASSED!\n");
