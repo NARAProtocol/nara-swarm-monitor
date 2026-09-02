@@ -11,6 +11,7 @@ import {
   ERC20_ABI,
   analyzeGridLiquidity,
   synthesizeBuyBracket,
+  synthesizeSellBracket,
   buildSafeBatchJson,
   buildRangeRangerTelegramAlert,
 } from "./rangeRangerRuntime.mjs";
@@ -30,6 +31,7 @@ const botToken = process.env.TELEGRAM_BOT_TOKEN;
 const chatId = process.env.TELEGRAM_CHAT_ID;
 const pollSeconds = Number(process.env.RANGE_RANGER_POLL_SECONDS || "30");
 const trancheUsdc = Number(process.env.RANGE_RANGER_TRANCHE_USDC || "600");
+const trancheNara = Number(process.env.RANGE_RANGER_TRANCHE_NARA || "20000");
 const minGapPct = Number(process.env.RANGE_RANGER_MIN_GAP_PCT || "20");
 const minVolPct = Number(process.env.RANGE_RANGER_VOLATILITY_PCT || "15");
 
@@ -56,14 +58,12 @@ async function sendTelegram(text) {
 }
 
 async function fetchOnChainState(client) {
-  // 1. Current pool state from RangeManager
   const poolState = await client.readContract({
     address: RANGE_MANAGER_ADDRESS,
     abi: RANGE_MANAGER_ABI,
     functionName: "currentPoolState",
   });
 
-  // 2. Active order IDs
   const [orderIds] = await client.readContract({
     address: RANGE_MANAGER_ADDRESS,
     abi: RANGE_MANAGER_ABI,
@@ -71,7 +71,6 @@ async function fetchOnChainState(client) {
     args: [0n, 50n],
   });
 
-  // 3. Fetch each active order
   const activeOrders = [];
   for (const id of orderIds) {
     const raw = await client.readContract({
@@ -94,7 +93,6 @@ async function fetchOnChainState(client) {
     });
   }
 
-  // 4. Treasury Safe USDC Balance
   const safeUsdcBalance = await client.readContract({
     address: USDC_ADDRESS,
     abi: ERC20_ABI,
@@ -117,12 +115,10 @@ async function executeCycle(client, lastState) {
   const now = Date.now();
   let triggerReason = null;
 
-  // Check 1: Liquidity Gap > minGapPct
   if (analysis.closestBuyDistancePct === null || analysis.closestBuyDistancePct >= minGapPct) {
     triggerReason = `Liquidity Gap: ${analysis.closestBuyDistancePct !== null ? analysis.closestBuyDistancePct.toFixed(1) + "%" : "No Support"} below spot`;
   }
 
-  // Check 2: Volatility move >= minVolPct since last alert
   if (!triggerReason && lastState.lastAlertPrice) {
     const priceChangePct = Math.abs((analysis.spotPrice - lastState.lastAlertPrice) / lastState.lastAlertPrice) * 100;
     if (priceChangePct >= minVolPct) {
@@ -130,7 +126,6 @@ async function executeCycle(client, lastState) {
     }
   }
 
-  // Check rate limit: minimum 30 mins between routine alerts unless first run or explicit test
   const timeSinceLastAlert = now - (lastState.lastAlertTime || 0);
   const isRateLimited = timeSinceLastAlert < 30 * 60 * 1000;
 
@@ -143,35 +138,38 @@ async function executeCycle(client, lastState) {
   );
 
   if (triggerReason && (!isRateLimited || testNotification)) {
-    console.log(`? Trigger fired: ${triggerReason}`);
+    console.log(`⚡ Trigger fired: ${triggerReason}`);
 
-    // Synthesize bracket
-    const bands = synthesizeBuyBracket(analysis.spotPrice, trancheUsdc);
+    const buyBands = synthesizeBuyBracket(analysis.spotPrice, trancheUsdc, state.currentTick);
+    const sellBands = synthesizeSellBracket(analysis.spotPrice, trancheNara, state.currentTick);
     const safeBatch = buildSafeBatchJson({
       chainId: 8453,
       safeAddress: TREASURY_SAFE_ADDRESS,
-      bands,
+      staleOrders: analysis.staleOrders,
+      buyBands,
+      sellBands,
     });
 
-    // Ensure deployments directory exists
     const deploymentsDir = path.resolve("deployments");
     if (!fs.existsSync(deploymentsDir)) fs.mkdirSync(deploymentsDir, { recursive: true });
 
-    const batchFilename = `UNEXECUTED-range-rebalance-${Date.now()}.json`;
+    const batchFilename = `UNEXECUTED-atomic-overhaul-${Date.now()}.json`;
     const batchPath = path.join(deploymentsDir, batchFilename);
     fs.writeFileSync(batchPath, JSON.stringify(safeBatch, null, 2));
-    console.log(`?? Saved Safe Batch JSON to ${batchPath}`);
+    console.log(`📁 Saved Safe Batch JSON to ${batchPath}`);
 
     const alertMsg = buildRangeRangerTelegramAlert({
       reason: triggerReason,
       analysis,
-      bands,
+      buyBands,
+      sellBands,
+      staleOrders: analysis.staleOrders,
       safeUsdcBalance: state.safeUsdcBalance,
       batchFilename: `deployments/${batchFilename}`,
     });
 
     await sendTelegram(alertMsg);
-    console.log("?? Telegram tactical alert dispatched.");
+    console.log("📱 Telegram tactical alert dispatched.");
 
     lastState.lastAlertTime = now;
     lastState.lastAlertPrice = analysis.spotPrice;
@@ -181,8 +179,8 @@ async function executeCycle(client, lastState) {
 }
 
 export async function main() {
-  console.log("?? NARA Range Ranger Watcher starting...");
-  console.log(`Config: Poll ${pollSeconds}s | Tranche: $${trancheUsdc} USDC | Gap Trigger: ${minGapPct}% | Vol Trigger: ${minVolPct}%`);
+  console.log("🏹 NARA Range Ranger Watcher starting...");
+  console.log(`Config: Poll ${pollSeconds}s | Buy Tranche: $${trancheUsdc} USDC | Sell Tranche: ${trancheNara} NARA | Gap Trigger: ${minGapPct}% | Vol Trigger: ${minVolPct}%`);
 
   let lastState = { lastAlertTime: 0, lastAlertPrice: null };
 
@@ -194,7 +192,7 @@ export async function main() {
 
     if (testNotification) {
       console.log("Running in test notification mode...");
-      lastState.lastAlertTime = 0; // Bypass rate limit
+      lastState.lastAlertTime = 0;
       await executeCycle(client, lastState);
       process.exit(0);
     }
