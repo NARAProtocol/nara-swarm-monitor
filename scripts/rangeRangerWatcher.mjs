@@ -1,4 +1,4 @@
-import * as fs from "node:fs";
+﻿import * as fs from "node:fs";
 import * as path from "node:path";
 import { createPublicClient, http } from "viem";
 import { base } from "viem/chains";
@@ -126,8 +126,13 @@ async function executeCycle(client, lastState) {
     }
   }
 
+  const isVolatileMove = lastState.lastAlertPrice
+    ? Math.abs((analysis.spotPrice - lastState.lastAlertPrice) / lastState.lastAlertPrice) * 100 >= minVolPct
+    : false;
+  const isOrderBookDepleted = analysis.activeSellCount === 0 || analysis.activeBuyCount === 0;
+  const shouldBypassRateLimit = isVolatileMove || isOrderBookDepleted;
   const timeSinceLastAlert = now - (lastState.lastAlertTime || 0);
-  const isRateLimited = timeSinceLastAlert < 30 * 60 * 1000;
+  const isRateLimited = !shouldBypassRateLimit && timeSinceLastAlert < 30 * 60 * 1000;
 
   console.log(
     `[${new Date().toISOString()}] Spot: $${analysis.spotPrice.toFixed(4)} | Nearest Buy: ${
@@ -138,7 +143,7 @@ async function executeCycle(client, lastState) {
   );
 
   if (triggerReason && (!isRateLimited || testNotification)) {
-    console.log(`⚡ Trigger fired: ${triggerReason}`);
+    console.log(`âš¡ Trigger fired: ${triggerReason}`);
 
     const buyBands = synthesizeBuyBracket(analysis.spotPrice, trancheUsdc, state.currentTick);
     const sellBands = synthesizeSellBracket(analysis.spotPrice, trancheNara, state.currentTick);
@@ -156,7 +161,7 @@ async function executeCycle(client, lastState) {
     const batchFilename = `UNEXECUTED-atomic-overhaul-${Date.now()}.json`;
     const batchPath = path.join(deploymentsDir, batchFilename);
     fs.writeFileSync(batchPath, JSON.stringify(safeBatch, null, 2));
-    console.log(`📁 Saved Safe Batch JSON to ${batchPath}`);
+    console.log(`ðŸ“ Saved Safe Batch JSON to ${batchPath}`);
 
     const alertMsg = buildRangeRangerTelegramAlert({
       reason: triggerReason,
@@ -169,7 +174,7 @@ async function executeCycle(client, lastState) {
     });
 
     await sendTelegram(alertMsg);
-    console.log("📱 Telegram tactical alert dispatched.");
+    console.log("ðŸ“± Telegram tactical alert dispatched.");
 
     lastState.lastAlertTime = now;
     lastState.lastAlertPrice = analysis.spotPrice;
@@ -179,7 +184,7 @@ async function executeCycle(client, lastState) {
 }
 
 export async function main() {
-  console.log("🏹 NARA Range Ranger Watcher starting...");
+  console.log("ðŸ¹ NARA Range Ranger Watcher starting...");
   console.log(`Config: Poll ${pollSeconds}s | Buy Tranche: $${trancheUsdc} USDC | Sell Tranche: ${trancheNara} NARA | Gap Trigger: ${minGapPct}% | Vol Trigger: ${minVolPct}%`);
 
   let lastState = { lastAlertTime: 0, lastAlertPrice: null };
