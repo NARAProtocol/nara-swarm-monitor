@@ -21,6 +21,7 @@ export const RANGE_MANAGER_ABI = parseAbi([
   "function getOrder(uint256 orderId) view returns (uint256 tokenId, uint256 inputAmount, uint256 minimumOutputAmount, bytes32 strategyHash, uint128 liquidity, int24 tickLower, int24 tickUpper, uint64 createdBlock, uint64 creationDeadline, uint64 terminalBlock, uint8 side, uint8 status)",
   "function createBuyNaraOrder(int24 tickLower, int24 tickUpper, uint128 maximumUsdcInput, uint128 minimumNaraOutput, bytes32 strategyHash, uint64 deadline) returns (uint256 orderId, uint256 tokenId)",
   "function createSellNaraOrder(int24 tickLower, int24 tickUpper, uint128 maximumNaraInput, uint128 minimumUsdcOutput, bytes32 strategyHash, uint64 deadline) returns (uint256 orderId, uint256 tokenId)",
+  "function cancel(uint256 orderId, uint128 minNaraOut, uint128 minUsdcOut, uint64 deadline) returns (uint256 naraOut, uint256 usdcOut)",
   "function assertOperationalClean() view returns (bool)",
 ]);
 
@@ -60,6 +61,7 @@ export function analyzeGridLiquidity(currentTick, activeOrders) {
 
   const buyOrders = [];
   const sellOrders = [];
+  const staleOrders = [];
 
   for (const order of activeOrders) {
     if (order.status !== 1) continue; // Only active orders
@@ -68,7 +70,12 @@ export function analyzeGridLiquidity(currentTick, activeOrders) {
     const pLower = tickToPriceUsdc(order.tickUpper);
     const orderData = { ...order, pLower, pUpper };
 
-    if (order.side === 0) {
+    // Mark as stale if order is > 50% away from current spot
+    if (pLower > spotPrice * 1.5 || pUpper < spotPrice * 0.5) {
+      staleOrders.push(orderData);
+    }
+
+    if (Number(order.side) === 1) {
       // BUY order: sits below spot
       buyOrders.push(orderData);
       const distPct = ((spotPrice - pUpper) / spotPrice) * 100;
@@ -76,7 +83,7 @@ export function analyzeGridLiquidity(currentTick, activeOrders) {
         closestBuyDistancePct = distPct;
         closestBuy = orderData;
       }
-    } else if (order.side === 1) {
+    } else if (Number(order.side) === 0) {
       // SELL order: sits above spot
       sellOrders.push(orderData);
       const distPct = ((pLower - spotPrice) / spotPrice) * 100;
@@ -92,6 +99,7 @@ export function analyzeGridLiquidity(currentTick, activeOrders) {
     currentTick,
     activeBuyCount: buyOrders.length,
     activeSellCount: sellOrders.length,
+    staleOrders,
     closestBuy,
     closestBuyDistancePct: closestBuyDistancePct !== null ? Math.max(0, closestBuyDistancePct) : null,
     closestSell,
@@ -103,8 +111,7 @@ export function analyzeGridLiquidity(currentTick, activeOrders) {
 /**
  * Synthesizes an optimal front-heavy 4-band buy bracket under spot price
  */
-export function synthesizeBuyBracket(spotPrice, usdcBudgetTotal = 600) {
-  // Front-heavy distribution: 40% in band 1, 30% in band 2, 20% in band 3, 10% in band 4
+export function synthesizeBuyBracket(spotPrice, usdcBudgetTotal = 600, currentTick = null) {
   const bandRatios = [0.40, 0.30, 0.20, 0.10];
   const bandDisplacements = [
     { fromPct: 0.05, toPct: 0.09 }, // -5% to -9%
@@ -118,24 +125,23 @@ export function synthesizeBuyBracket(spotPrice, usdcBudgetTotal = 600) {
     const disp = bandDisplacements[i];
     const highPrice = spotPrice * (1 - disp.fromPct);
     const lowPrice = spotPrice * (1 - disp.toPct);
-    const tickLower = priceToTick(highPrice); // Higher price = lower tick
-    const tickUpper = priceToTick(lowPrice); // Lower price = higher tick
+    let tickLower = Math.min(priceToTick(highPrice), priceToTick(lowPrice));
+    let tickUpper = Math.max(priceToTick(highPrice), priceToTick(lowPrice));
 
-    // Ensure tickLower < tickUpper and both aligned
-    const tLower = Math.min(tickLower, tickUpper);
-    const tUpper = Math.max(tickLower, tickUpper);
+    if (currentTick !== null) {
+      if (tickLower <= currentTick) tickLower = Math.floor(currentTick / TICK_SPACING) * TICK_SPACING + TICK_SPACING;
+      if (tickUpper <= tickLower) tickUpper = tickLower + TICK_SPACING * 4;
+    }
 
     const budgetUsdc = Math.floor(usdcBudgetTotal * bandRatios[i]);
     const maxUsdcInput = BigInt(budgetUsdc) * 10n ** BigInt(USDC_DECIMALS);
-
-    // Conservative minimum NARA output based on upper price limit with 2% margin
     const minNaraRaw = (maxUsdcInput * 10n ** 18n) / (BigInt(Math.floor(highPrice * 1e6)) + 1n);
 
     bands.push({
       bandIndex: i + 1,
       targetPriceRange: `$${lowPrice.toFixed(4)} – $${highPrice.toFixed(4)}`,
-      tickLower: tLower,
-      tickUpper: tUpper,
+      tickLower,
+      tickUpper,
       usdcBudget: budgetUsdc,
       maximumUsdcInput: maxUsdcInput,
       minimumNaraOutput: (minNaraRaw * 98n) / 100n, // 2% slippage safety
@@ -146,35 +152,114 @@ export function synthesizeBuyBracket(spotPrice, usdcBudgetTotal = 600) {
 }
 
 /**
- * Builds a valid Safe Transaction Builder JSON payload
+ * Synthesizes an optimal 4-band sell bracket above spot price
+ */
+export function synthesizeSellBracket(spotPrice, naraBudgetTotal = 20000, currentTick = null) {
+  const sellRatios = [0.25, 0.25, 0.25, 0.25];
+  const sellDisplacements = [
+    { fromPct: 0.15, toPct: 0.35 },
+    { fromPct: 0.35, toPct: 0.65 },
+    { fromPct: 0.65, toPct: 1.10 },
+    { fromPct: 1.10, toPct: 1.80 },
+  ];
+
+  const bands = [];
+  for (let i = 0; i < sellDisplacements.length; i++) {
+    const disp = sellDisplacements[i];
+    const lowPrice = spotPrice * (1 + disp.fromPct);
+    const highPrice = spotPrice * (1 + disp.toPct);
+    let tickLower = Math.min(priceToTick(highPrice), priceToTick(lowPrice));
+    let tickUpper = Math.max(priceToTick(highPrice), priceToTick(lowPrice));
+
+    if (currentTick !== null) {
+      if (tickUpper >= currentTick) tickUpper = Math.floor(currentTick / TICK_SPACING) * TICK_SPACING - TICK_SPACING;
+      if (tickLower >= tickUpper) tickLower = tickUpper - TICK_SPACING * 4;
+    }
+
+    const budgetNara = Math.floor(naraBudgetTotal * sellRatios[i]);
+    const maxNaraInput = BigInt(budgetNara) * 10n ** BigInt(NARA_DECIMALS);
+    const minUsdcRaw = ((maxNaraInput * BigInt(Math.floor(lowPrice * 1e6))) / 10n ** 18n * 98n) / 100n;
+
+    bands.push({
+      bandIndex: i + 1,
+      targetPriceRange: `$${lowPrice.toFixed(4)} – $${highPrice.toFixed(4)}`,
+      tickLower,
+      tickUpper,
+      naraBudget: budgetNara,
+      maximumNaraInput: maxNaraInput,
+      minimumUsdcOutput: minUsdcRaw,
+    });
+  }
+
+  return bands;
+}
+
+/**
+ * Builds an Atomic All-In-One Safe Transaction Builder JSON payload
+ * Cancels stale orders + Approves Tokens + Deploys Buy & Sell Ladders + Clears Approvals + Asserts Clean
  */
 export function buildSafeBatchJson({
   chainId = 8453,
   safeAddress = TREASURY_SAFE_ADDRESS,
-  bands,
-  strategyHash = keccak256(toHex(`NARA-RANGE-RANGER-${Date.now()}`)),
+  staleOrders = [],
+  buyBands = [],
+  sellBands = [],
+  strategyHash = keccak256(toHex(`NARA-ATOMIC-OVERHAUL-${Date.now()}`)),
   deadlineSeconds = 86400 * 7, // 7 days
 }) {
   const deadline = BigInt(Math.floor(Date.now() / 1000) + deadlineSeconds);
-  const totalUsdcRequired = bands.reduce((acc, b) => acc + b.maximumUsdcInput, 0n);
+  const totalUsdcRequired = buyBands.reduce((acc, b) => acc + b.maximumUsdcInput, 0n);
+  const totalNaraRequired = sellBands.reduce((acc, s) => acc + s.maximumNaraInput, 0n);
 
   const transactions = [];
 
-  // 1. Approve exact USDC to RangeManager
-  transactions.push({
-    to: USDC_ADDRESS,
-    value: "0",
-    data: encodeFunctionData({
-      abi: ERC20_ABI,
-      functionName: "approve",
-      args: [RANGE_MANAGER_ADDRESS, totalUsdcRequired],
-    }),
-    contractMethod: null,
-    contractInputsValues: null,
-  });
+  // Step 1: Cancel all stale / off-market orders (Assets instantly returned to Safe)
+  for (const s of staleOrders) {
+    transactions.push({
+      to: RANGE_MANAGER_ADDRESS,
+      value: "0",
+      data: encodeFunctionData({
+        abi: RANGE_MANAGER_ABI,
+        functionName: "cancel",
+        args: [BigInt(s.orderId), 0n, 0n, deadline],
+      }),
+      contractMethod: null,
+      contractInputsValues: null,
+    });
+  }
 
-  // 2. Create each Buy Order
-  for (const band of bands) {
+  // Step 2: Approve required USDC
+  if (totalUsdcRequired > 0n) {
+    transactions.push({
+      to: USDC_ADDRESS,
+      value: "0",
+      data: encodeFunctionData({
+        abi: ERC20_ABI,
+        functionName: "approve",
+        args: [RANGE_MANAGER_ADDRESS, totalUsdcRequired],
+      }),
+      contractMethod: null,
+      contractInputsValues: null,
+    });
+  }
+
+  // Step 3: Approve required NARA
+  if (totalNaraRequired > 0n) {
+    transactions.push({
+      to: NARA_ADDRESS,
+      value: "0",
+      data: encodeFunctionData({
+        abi: ERC20_ABI,
+        functionName: "approve",
+        args: [RANGE_MANAGER_ADDRESS, totalNaraRequired],
+      }),
+      contractMethod: null,
+      contractInputsValues: null,
+    });
+  }
+
+  // Step 4: Deploy fresh Buy Bands
+  for (const band of buyBands) {
     transactions.push({
       to: RANGE_MANAGER_ADDRESS,
       value: "0",
@@ -195,7 +280,54 @@ export function buildSafeBatchJson({
     });
   }
 
-  // 3. Final invariant check: assertOperationalClean
+  // Step 5: Deploy fresh Sell Bands
+  for (const band of sellBands) {
+    transactions.push({
+      to: RANGE_MANAGER_ADDRESS,
+      value: "0",
+      data: encodeFunctionData({
+        abi: RANGE_MANAGER_ABI,
+        functionName: "createSellNaraOrder",
+        args: [
+          band.tickLower,
+          band.tickUpper,
+          band.maximumNaraInput,
+          band.minimumUsdcOutput,
+          strategyHash,
+          deadline,
+        ],
+      }),
+      contractMethod: null,
+      contractInputsValues: null,
+    });
+  }
+
+  // Step 6: Clear residual allowances to zero
+  transactions.push({
+    to: USDC_ADDRESS,
+    value: "0",
+    data: encodeFunctionData({
+      abi: ERC20_ABI,
+      functionName: "approve",
+      args: [RANGE_MANAGER_ADDRESS, 0n],
+    }),
+    contractMethod: null,
+    contractInputsValues: null,
+  });
+
+  transactions.push({
+    to: NARA_ADDRESS,
+    value: "0",
+    data: encodeFunctionData({
+      abi: ERC20_ABI,
+      functionName: "approve",
+      args: [RANGE_MANAGER_ADDRESS, 0n],
+    }),
+    contractMethod: null,
+    contractInputsValues: null,
+  });
+
+  // Step 7: Final operational clean invariant check
   transactions.push({
     to: RANGE_MANAGER_ADDRESS,
     value: "0",
@@ -213,8 +345,8 @@ export function buildSafeBatchJson({
     chainId: String(chainId),
     createdAt: Date.now(),
     meta: {
-      name: "Range Ranger Tactical Rebalance Batch",
-      description: `Tactical 4-band buy bracket securing ${bands[0].targetPriceRange.split("–")[1]?.trim()} floor. Total: $${Number(totalUsdcRequired) / 1e6} USDC.`,
+      name: "NARA Elite Atomic Overhaul & Rebalance Batch",
+      description: `Atomic overhaul: Cancels ${staleOrders.length} stale orders + Deploys ${buyBands.length} Buy Bands ($${Number(totalUsdcRequired) / 1e6} USDC) + Deploys ${sellBands.length} Sell Bands (${Number(totalNaraRequired) / 1e18} NARA).`,
       txBuilderVersion: "1.18.0",
       createdFromSafeAddress: safeAddress,
     },
@@ -228,7 +360,9 @@ export function buildSafeBatchJson({
 export function buildRangeRangerTelegramAlert({
   reason,
   analysis,
-  bands,
+  buyBands = [],
+  sellBands = [],
+  staleOrders = [],
   safeUsdcBalance,
   batchFilename,
 }) {
@@ -237,11 +371,19 @@ export function buildRangeRangerTelegramAlert({
     : "No active buy support";
 
   const banner = analysis.hasLiquidityGap
-    ? "?? ?? [RANGE RANGER: LIQUIDITY GAP ALERT]"
+    ? "?? ?? [RANGE RANGER: ATOMIC OVERHAUL REQUIRED]"
     : "?? ? [RANGE RANGER: TACTICAL REBALANCE]";
 
-  const bandLines = bands.map(
-    (b) => `  • Band #${b.bandIndex}: ${b.targetPriceRange} ($${b.usdcBudget} USDC)`,
+  const staleLines = staleOrders.length > 0
+    ? staleOrders.map((s) => `  • Cancel Order #${s.orderId}: ${s.pRange || "out-of-market"}`)
+    : ["  • None"];
+
+  const buyLines = buyBands.map(
+    (b) => `  • Buy #${b.bandIndex}: ${b.targetPriceRange} ($${b.usdcBudget} USDC)`,
+  );
+
+  const sellLines = sellBands.map(
+    (s) => `  • Sell #${s.bandIndex}: ${s.targetPriceRange} (${s.naraBudget} NARA)`,
   );
 
   return [
@@ -253,10 +395,14 @@ export function buildRangeRangerTelegramAlert({
     `?? Nearest Sell: ${analysis.closestSell ? `$${analysis.closestSell.pLower.toFixed(4)}` : "None"}`,
     "????????????????????",
     `?? Treasury Safe Available: $${formatUsdcNumber(Number(safeUsdcBalance) / 1e6)} USDC`,
-    `?? Recommended 4-Band Ladder ($${bands.reduce((s, b) => s + b.usdcBudget, 0)} USDC):`,
-    ...bandLines,
+    `??? Atomic Cancellations (${staleOrders.length} stale orders):`,
+    ...staleLines,
+    `?? Fresh Buy Ladder ($${buyBands.reduce((s, b) => s + b.usdcBudget, 0)} USDC):`,
+    ...buyLines,
+    `?? Fresh Sell Ladder (${sellBands.reduce((s, b) => s + b.naraBudget, 0)} NARA):`,
+    ...sellLines,
     "????????????????????",
-    `?? Safe Batch Generated: ${batchFilename}`,
-    "?? Import JSON into Safe Transaction Builder to deploy.",
+    `?? Atomic Safe Batch Generated: ${batchFilename}`,
+    "?? Import JSON into Safe Transaction Builder to execute everything in 1 single transaction.",
   ].join("\n");
 }
