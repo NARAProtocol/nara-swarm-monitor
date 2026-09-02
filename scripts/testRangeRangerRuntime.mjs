@@ -1,4 +1,4 @@
-import assert from "node:assert/strict";
+﻿import assert from "node:assert/strict";
 import {
   TICK_SPACING,
   tickToPriceUsdc,
@@ -8,6 +8,8 @@ import {
   synthesizeSellBracket,
   buildSafeBatchJson,
   buildRangeRangerTelegramAlert,
+  buildAutonomousSuccessTelegramAlert,
+  executeAutonomousSafeBatch,
   RANGE_MANAGER_ADDRESS,
   USDC_ADDRESS,
   NARA_ADDRESS,
@@ -127,7 +129,7 @@ console.log("Running Range Ranger Runtime Tests...\n");
     closestSell: null,
     hasLiquidityGap: true,
   };
-  const staleOrders = [{ orderId: 3n, pRange: "$0.16 � $0.22" }];
+  const staleOrders = [{ orderId: 3n, pRange: "$0.16 – $0.22" }];
   const buyBands = synthesizeBuyBracket(0.0053, 600, 328635);
   const sellBands = synthesizeSellBracket(0.0053, 20000, 328635);
 
@@ -150,4 +152,60 @@ console.log("Running Range Ranger Runtime Tests...\n");
   console.log("? 5. Atomic Telegram alert card formatting passed.");
 }
 
-console.log("\n?? ALL ATOMIC RANGE RANGER RUNTIME TESTS PASSED!\n");
+
+// 6. Test buildAutonomousSuccessTelegramAlert
+{
+  const analysis = { spotPrice: 0.0727 };
+  const staleOrders = [{ orderId: 21n }];
+  const buyBands = [{ bandIndex: 1, usdcBudget: 320 }];
+  const sellBands = [{ bandIndex: 1, naraBudget: 5000 }];
+
+  const msg = buildAutonomousSuccessTelegramAlert({
+    reason: "Volatility Shift >= 15%",
+    analysis,
+    buyBands,
+    sellBands,
+    staleOrders,
+    safeUsdcBalance: 2521320000n,
+    txHash: "0xe5382c9a83d171a9c9707ef49e5ac4cc1cb9e35d5e07dc6d5b4efe359dcf5917",
+    blockNumber: 50792858,
+    gasUsed: 4125336n,
+  });
+
+  assert.ok(msg.includes("AUTONOMOUS REBALANCE CONFIRMED"), "Message should contain confirmation header");
+  assert.ok(msg.includes("0.0727"), "Message should contain spot price");
+  assert.ok(msg.includes("0xe5382c9a"), "Message should contain tx hash");
+  assert.ok(msg.includes("50792858"), "Message should contain block number");
+  assert.ok(typeof executeAutonomousSafeBatch === "function", "executeAutonomousSafeBatch should be exported function");
+  console.log("✔ 6. Autonomous execution Telegram card formatting passed.");
+}
+
+
+// 6. Test buildAutonomousSuccessTelegramAlert
+{
+  const analysis = { spotPrice: 0.0727 };
+  const staleOrders = [{ orderId: 21n }];
+  const buyBands = [{ bandIndex: 1, usdcBudget: 320 }];
+  const sellBands = [{ bandIndex: 1, naraBudget: 5000 }];
+
+  const msg = buildAutonomousSuccessTelegramAlert({
+    reason: "Volatility Shift >= 15%",
+    analysis,
+    buyBands,
+    sellBands,
+    staleOrders,
+    safeUsdcBalance: 2521320000n,
+    txHash: "0xe5382c9a83d171a9c9707ef49e5ac4cc1cb9e35d5e07dc6d5b4efe359dcf5917",
+    blockNumber: 50792858,
+    gasUsed: 4125336n,
+  });
+
+  assert.ok(msg.includes("AUTONOMOUS REBALANCE CONFIRMED"), "Message should contain confirmation header");
+  assert.ok(msg.includes("0.0727"), "Message should contain spot price");
+  assert.ok(msg.includes("0xe5382c9a"), "Message should contain tx hash");
+  assert.ok(msg.includes("50792858"), "Message should contain block number");
+  assert.ok(typeof executeAutonomousSafeBatch === "function", "executeAutonomousSafeBatch should be exported function");
+  console.log("✔ 6. Autonomous execution Telegram card formatting passed.");
+}
+
+console.log("\n🎉 ALL ATOMIC RANGE RANGER RUNTIME TESTS PASSED!\n");

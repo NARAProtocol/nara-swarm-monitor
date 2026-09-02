@@ -1,6 +1,7 @@
-﻿import * as fs from "node:fs";
+import * as fs from "node:fs";
 import * as path from "node:path";
-import { createPublicClient, http } from "viem";
+import { createPublicClient, createWalletClient, http } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
 import { base } from "viem/chains";
 import { configuredRpcUrls, withRpcFailover } from "./rpcFailoverRuntime.mjs";
 import {
@@ -14,6 +15,8 @@ import {
   synthesizeSellBracket,
   buildSafeBatchJson,
   buildRangeRangerTelegramAlert,
+  executeAutonomousSafeBatch,
+  buildAutonomousSuccessTelegramAlert,
 } from "./rangeRangerRuntime.mjs";
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -34,9 +37,11 @@ const trancheUsdc = Number(process.env.RANGE_RANGER_TRANCHE_USDC || "600");
 const trancheNara = Number(process.env.RANGE_RANGER_TRANCHE_NARA || "20000");
 const minGapPct = Number(process.env.RANGE_RANGER_MIN_GAP_PCT || "20");
 const minVolPct = Number(process.env.RANGE_RANGER_VOLATILITY_PCT || "15");
+const autoExecute = ["true", "1"].includes(String(process.env.RANGE_RANGER_AUTO_EXECUTE || "false").toLowerCase());
+const treasuryPrivateKey = process.env.TREASURY_PRIVATE_KEY;
 
 const rpcUrls = configuredRpcUrls();
-const redactions = [botToken, ...rpcUrls].filter(Boolean);
+const redactions = [botToken, treasuryPrivateKey, ...rpcUrls].filter(Boolean);
 
 function safeMessage(error) {
   let message = error instanceof Error ? error.message : "unknown error";
@@ -155,13 +160,53 @@ async function executeCycle(client, lastState) {
       sellBands,
     });
 
+    if (autoExecute && treasuryPrivateKey) {
+      console.log("⚡ RANGE_RANGER_AUTO_EXECUTE enabled. Executing Safe batch directly on-chain...");
+      try {
+        const account = privateKeyToAccount(treasuryPrivateKey);
+        const rpcEndpoint = client.transport?.url || "https://mainnet.base.org";
+        const walletClient = createWalletClient({
+          account,
+          chain: base,
+          transport: http(rpcEndpoint),
+        });
+
+        const { hash, receipt } = await executeAutonomousSafeBatch({
+          publicClient: client,
+          walletClient,
+          safeAddress: TREASURY_SAFE_ADDRESS,
+          transactions: safeBatch.transactions,
+        });
+
+        console.log(`✅ Autonomous rebalance confirmed in block #${receipt.blockNumber}! Tx: ${hash}`);
+        const successAlert = buildAutonomousSuccessTelegramAlert({
+          reason: triggerReason,
+          analysis,
+          buyBands,
+          sellBands,
+          staleOrders: analysis.staleOrders,
+          safeUsdcBalance: state.safeUsdcBalance,
+          txHash: hash,
+          blockNumber: receipt.blockNumber,
+          gasUsed: receipt.gasUsed,
+        });
+        await sendTelegram(successAlert);
+
+        lastState.lastAlertTime = now;
+        lastState.lastAlertPrice = analysis.spotPrice;
+        return lastState;
+      } catch (autoErr) {
+        console.error("❌ Autonomous execution encountered error, falling back to manual batch alert:", safeMessage(autoErr));
+      }
+    }
+
     const deploymentsDir = path.resolve("deployments");
     if (!fs.existsSync(deploymentsDir)) fs.mkdirSync(deploymentsDir, { recursive: true });
 
     const batchFilename = `UNEXECUTED-atomic-overhaul-${Date.now()}.json`;
     const batchPath = path.join(deploymentsDir, batchFilename);
     fs.writeFileSync(batchPath, JSON.stringify(safeBatch, null, 2));
-    console.log(`ðŸ“ Saved Safe Batch JSON to ${batchPath}`);
+    console.log(`📁 Saved Safe Batch JSON to ${batchPath}`);
 
     const alertMsg = buildRangeRangerTelegramAlert({
       reason: triggerReason,
@@ -174,7 +219,7 @@ async function executeCycle(client, lastState) {
     });
 
     await sendTelegram(alertMsg);
-    console.log("ðŸ“± Telegram tactical alert dispatched.");
+    console.log("📱 Telegram tactical alert dispatched.");
 
     lastState.lastAlertTime = now;
     lastState.lastAlertPrice = analysis.spotPrice;
