@@ -1,4 +1,4 @@
-import { encodeFunctionData, parseAbi, keccak256, toHex } from "viem";
+import { encodeFunctionData, parseAbi, parseAbiItem, keccak256, toHex } from "viem";
 
 export const TICK_SPACING = 60;
 export const USDC_DECIMALS = 6;
@@ -9,6 +9,11 @@ export const RANGE_MANAGER_ADDRESS = "0xd58afa5eaB20B0ED287851Cf98f359AdEd58a69C
 export const TREASURY_SAFE_ADDRESS = "0x5050BC6dc3E07313D52D05cecD53f727D6CDa245";
 export const USDC_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
 export const NARA_ADDRESS = "0xB6333F5D4cEd8dffA80F3F13697D6aA3BB3f19c1";
+export const HOOK_ADDRESS = "0x59AEf9799DEA01A7FB7dA73BEA10dfB08858A088";
+
+export const POOL_FEE_TAKEN_EVENT = parseAbiItem(
+  "event PoolFeeTaken(bytes32 indexed poolId, address indexed sender, address indexed currency, uint256 amountIn, uint256 feeAmount, uint16 feeBps, bool isBuy)"
+);
 
 export const ERC20_ABI = parseAbi([
   "function approve(address spender, uint256 amount) returns (bool)",
@@ -99,14 +104,208 @@ export function analyzeGridLiquidity(currentTick, activeOrders) {
   };
 }
 
-export function synthesizeBuyBracket(spotPrice, usdcBudgetTotal = 600, currentTick = null) {
-  const bandRatios = [0.40, 0.30, 0.20, 0.10];
-  const bandDisplacements = [
-    { fromPct: 0.05, toPct: 0.09 },
-    { fromPct: 0.09, toPct: 0.14 },
-    { fromPct: 0.14, toPct: 0.21 },
-    { fromPct: 0.21, toPct: 0.30 },
-  ];
+export async function calculateMarketFlow({
+  client = null,
+  hookAddress = HOOK_ADDRESS,
+  currentTick,
+  lastPrice = null,
+  activeOrders = [],
+}) {
+  let buyVolumeUsdc = 0;
+  let sellVolumeNara = 0;
+  let sellVolumeUsdcApprox = 0;
+  let swapCount = 0;
+  let logPressure = 0;
+  let hasLogData = false;
+
+  const spotPrice = tickToPriceUsdc(currentTick);
+
+  if (client) {
+    try {
+      const latestBlock = await client.getBlockNumber();
+      const fromBlock = latestBlock > 1900n ? latestBlock - 1900n : 0n;
+      const logs = await client.getLogs({
+        address: hookAddress,
+        event: POOL_FEE_TAKEN_EVENT,
+        fromBlock,
+        toBlock: latestBlock,
+      });
+
+      if (logs && logs.length > 0) {
+        hasLogData = true;
+        swapCount = logs.length;
+        for (const log of logs) {
+          const isBuy = Boolean(log.args.isBuy);
+          const amt = BigInt(log.args.amountIn || 0n);
+          if (isBuy) {
+            buyVolumeUsdc += Number(amt) / 1e6;
+          } else {
+            const naraAmt = Number(amt) / 1e18;
+            sellVolumeNara += naraAmt;
+            sellVolumeUsdcApprox += naraAmt * spotPrice;
+          }
+        }
+        const totalUsdcFlow = buyVolumeUsdc + sellVolumeUsdcApprox;
+        if (totalUsdcFlow > 0) {
+          logPressure = (buyVolumeUsdc - sellVolumeUsdcApprox) / totalUsdcFlow;
+        }
+      }
+    } catch {
+      // Gracefully fall back to price momentum and order-book depletion if log query fails
+    }
+  }
+
+  // Price momentum signal:
+  let pricePressure = 0;
+  let priceChangePct = 0;
+  if (lastPrice && lastPrice > 0) {
+    priceChangePct = ((spotPrice - lastPrice) / lastPrice) * 100;
+    pricePressure = Math.max(-1, Math.min(1, priceChangePct / 15));
+  }
+
+  // Order book inventory depletion signal:
+  const activeBuys = activeOrders.filter((o) => Number(o.side) === 1 && o.status === 1).length;
+  const activeSells = activeOrders.filter((o) => Number(o.side) === 0 && o.status === 1).length;
+  let bookPressure = 0;
+  if (activeBuys + activeSells > 0) {
+    // If active buys exceed active sells, buyers took out sell walls (net upward pressure)
+    bookPressure = (activeBuys - activeSells) / Math.max(1, activeBuys + activeSells);
+  }
+
+  // Synthesize Net Pressure P_net:
+  let netPressure = 0;
+  if (hasLogData) {
+    netPressure = logPressure * 0.6 + pricePressure * 0.3 + bookPressure * 0.1;
+  } else if (lastPrice) {
+    netPressure = pricePressure * 0.7 + bookPressure * 0.3;
+  } else {
+    netPressure = bookPressure * 0.5;
+  }
+  netPressure = Math.max(-1, Math.min(1, netPressure));
+
+  // Volatility Score V_vol:
+  const absMove = Math.abs(priceChangePct);
+  let volatilityScore = 1.0;
+  if (absMove >= 20) volatilityScore = 1.8;
+  else if (absMove >= 12) volatilityScore = 1.4;
+  else if (absMove >= 6) volatilityScore = 1.2;
+  else if (absMove <= 2 && swapCount <= 1) volatilityScore = 0.85;
+
+  let regime = "NEUTRAL_CHOP";
+  if (netPressure >= 0.25) regime = "BUY_PRESSURE";
+  else if (netPressure <= -0.25) regime = "SELL_PRESSURE";
+
+  return {
+    netPressure,
+    volatilityScore,
+    regime,
+    priceChangePct,
+    swapCount,
+    buyVolumeUsdc,
+    sellVolumeUsdcApprox,
+  };
+}
+
+export function calculateDynamicBudgets({
+  safeUsdcBalance = 0n,
+  safeNaraBalance = 0n,
+  marketFlow = null,
+  minUsdc = 300,
+  maxUsdc = 2500,
+  minNara = 10000,
+  maxNara = 100000,
+}) {
+  const liquidUsdc = Number(safeUsdcBalance) / 1e6;
+  const liquidNara = Number(safeNaraBalance) / 1e18;
+
+  const volMult = Math.max(0.85, Math.min(1.4, marketFlow?.volatilityScore ?? 1.0));
+
+  // Base allocation: 35% of Safe USDC, 25% of Safe NARA
+  const usdcRatio = 0.35;
+  const naraRatio = 0.25;
+
+  const calcUsdc = Math.round(liquidUsdc * usdcRatio * volMult);
+  const calcNara = Math.round(liquidNara * naraRatio * volMult);
+
+  let usdcBudget = calcUsdc;
+  if (liquidUsdc > 0) {
+    const maxDeployable = Math.floor(liquidUsdc * 0.85);
+    usdcBudget = Math.min(Math.max(minUsdc, calcUsdc), maxUsdc);
+    usdcBudget = Math.min(usdcBudget, maxDeployable);
+    if (usdcBudget < 50) usdcBudget = Math.max(1, maxDeployable);
+  } else {
+    usdcBudget = 0;
+  }
+
+  let naraBudget = calcNara;
+  if (liquidNara > 0) {
+    const maxDeployable = Math.floor(liquidNara * 0.85);
+    naraBudget = Math.min(Math.max(minNara, calcNara), maxNara);
+    naraBudget = Math.min(naraBudget, maxDeployable);
+    if (naraBudget < 100) naraBudget = Math.max(1, maxDeployable);
+  } else {
+    naraBudget = 0;
+  }
+
+  return {
+    usdcBudget,
+    naraBudget,
+    liquidUsdc,
+    liquidNara,
+    volMult,
+  };
+}
+
+export function synthesizeBuyBracket(spotPrice, usdcBudgetTotal = 600, currentTick = null, options = {}) {
+  const netPressure = options.netPressure ?? 0;
+  const tierCount = options.tierCount ?? 5;
+
+  let bandDisplacements;
+  let bandRatios;
+
+  if (tierCount === 4) {
+    // 4-tier legacy compatibility
+    bandRatios = [0.40, 0.30, 0.20, 0.10];
+    bandDisplacements = [
+      { fromPct: 0.03, toPct: 0.07 },
+      { fromPct: 0.07, toPct: 0.13 },
+      { fromPct: 0.13, toPct: 0.21 },
+      { fromPct: 0.21, toPct: 0.32 },
+    ];
+  } else {
+    // 5-tier adaptive dynamic distribution
+    if (netPressure > 0.25) {
+      // BUY PRESSURE: Tight, dense ascending floor to ratchet higher spot
+      bandRatios = [0.40, 0.30, 0.16, 0.09, 0.05];
+      bandDisplacements = [
+        { fromPct: 0.020, toPct: 0.045 },
+        { fromPct: 0.045, toPct: 0.080 },
+        { fromPct: 0.080, toPct: 0.130 },
+        { fromPct: 0.130, toPct: 0.200 },
+        { fromPct: 0.200, toPct: 0.300 },
+      ];
+    } else if (netPressure < -0.25) {
+      // SELL PRESSURE: Deeper stair-step to average down at steep discounts
+      bandRatios = [0.20, 0.25, 0.25, 0.18, 0.12];
+      bandDisplacements = [
+        { fromPct: 0.040, toPct: 0.085 },
+        { fromPct: 0.085, toPct: 0.150 },
+        { fromPct: 0.150, toPct: 0.240 },
+        { fromPct: 0.240, toPct: 0.360 },
+        { fromPct: 0.360, toPct: 0.550 },
+      ];
+    } else {
+      // NEUTRAL CHOP: Balanced spacing, zero dead zone
+      bandRatios = [0.35, 0.25, 0.20, 0.12, 0.08];
+      bandDisplacements = [
+        { fromPct: 0.025, toPct: 0.055 },
+        { fromPct: 0.055, toPct: 0.100 },
+        { fromPct: 0.100, toPct: 0.165 },
+        { fromPct: 0.165, toPct: 0.250 },
+        { fromPct: 0.250, toPct: 0.380 },
+      ];
+    }
+  }
 
   const bands = [];
   for (let i = 0; i < bandDisplacements.length; i++) {
@@ -121,7 +320,7 @@ export function synthesizeBuyBracket(spotPrice, usdcBudgetTotal = 600, currentTi
       if (tickUpper <= tickLower) tickUpper = tickLower + TICK_SPACING * 4;
     }
 
-    const budgetUsdc = Math.floor(usdcBudgetTotal * bandRatios[i]);
+    const budgetUsdc = Math.max(1, Math.floor(usdcBudgetTotal * bandRatios[i]));
     const maxUsdcInput = BigInt(budgetUsdc) * 10n ** BigInt(USDC_DECIMALS);
     const minNaraRaw = (maxUsdcInput * 10n ** 18n) / (BigInt(Math.floor(highPrice * 1e6)) + 1n);
 
@@ -139,14 +338,56 @@ export function synthesizeBuyBracket(spotPrice, usdcBudgetTotal = 600, currentTi
   return bands;
 }
 
-export function synthesizeSellBracket(spotPrice, naraBudgetTotal = 20000, currentTick = null) {
-  const sellRatios = [0.25, 0.25, 0.25, 0.25];
-  const sellDisplacements = [
-    { fromPct: 0.15, toPct: 0.35 },
-    { fromPct: 0.35, toPct: 0.65 },
-    { fromPct: 0.65, toPct: 1.10 },
-    { fromPct: 1.10, toPct: 1.80 },
-  ];
+export function synthesizeSellBracket(spotPrice, naraBudgetTotal = 20000, currentTick = null, options = {}) {
+  const netPressure = options.netPressure ?? 0;
+  const tierCount = options.tierCount ?? 5;
+
+  let sellDisplacements;
+  let sellRatios;
+
+  if (tierCount === 4) {
+    // 4-tier legacy compatibility
+    sellRatios = [0.25, 0.25, 0.25, 0.25];
+    sellDisplacements = [
+      { fromPct: 0.05, toPct: 0.15 },
+      { fromPct: 0.15, toPct: 0.35 },
+      { fromPct: 0.35, toPct: 0.70 },
+      { fromPct: 0.70, toPct: 1.40 },
+    ];
+  } else {
+    // 5-tier adaptive dynamic distribution
+    if (netPressure > 0.25) {
+      // BUY PRESSURE: Exponential sell ladder up to 3x spot (never sell cheap)
+      sellRatios = [0.15, 0.20, 0.25, 0.20, 0.20];
+      sellDisplacements = [
+        { fromPct: 0.060, toPct: 0.140 },
+        { fromPct: 0.140, toPct: 0.280 },
+        { fromPct: 0.280, toPct: 0.550 },
+        { fromPct: 0.550, toPct: 1.100 },
+        { fromPct: 1.100, toPct: 2.200 },
+      ];
+    } else if (netPressure < -0.25) {
+      // SELL PRESSURE: Tight sells right above spot to quickly cash out relief rallies
+      sellRatios = [0.35, 0.25, 0.20, 0.12, 0.08];
+      sellDisplacements = [
+        { fromPct: 0.025, toPct: 0.060 },
+        { fromPct: 0.060, toPct: 0.115 },
+        { fromPct: 0.115, toPct: 0.190 },
+        { fromPct: 0.190, toPct: 0.300 },
+        { fromPct: 0.300, toPct: 0.480 },
+      ];
+    } else {
+      // NEUTRAL CHOP: Balanced spacing, dead zone eliminated
+      sellRatios = [0.25, 0.25, 0.20, 0.15, 0.15];
+      sellDisplacements = [
+        { fromPct: 0.035, toPct: 0.075 },
+        { fromPct: 0.075, toPct: 0.150 },
+        { fromPct: 0.150, toPct: 0.280 },
+        { fromPct: 0.280, toPct: 0.500 },
+        { fromPct: 0.500, toPct: 0.950 },
+      ];
+    }
+  }
 
   const bands = [];
   for (let i = 0; i < sellDisplacements.length; i++) {
@@ -161,7 +402,7 @@ export function synthesizeSellBracket(spotPrice, naraBudgetTotal = 20000, curren
       if (tickLower >= tickUpper) tickLower = tickUpper - TICK_SPACING * 4;
     }
 
-    const budgetNara = Math.floor(naraBudgetTotal * sellRatios[i]);
+    const budgetNara = Math.max(1, Math.floor(naraBudgetTotal * sellRatios[i]));
     const maxNaraInput = BigInt(budgetNara) * 10n ** BigInt(NARA_DECIMALS);
     const minUsdcRaw = ((maxNaraInput * BigInt(Math.floor(lowPrice * 1e6))) / 10n ** 18n * 98n) / 100n;
 
@@ -335,6 +576,8 @@ export function buildRangeRangerTelegramAlert({
   sellBands = [],
   staleOrders = [],
   safeUsdcBalance,
+  safeNaraBalance = 0n,
+  marketFlow = null,
   batchFilename,
 }) {
   const buyGapText = analysis.closestBuyDistancePct !== null
@@ -345,18 +588,35 @@ export function buildRangeRangerTelegramAlert({
     ? "\u{1F3F9} \u{26A0}\u{FE0F} [RANGE RANGER: ATOMIC OVERHAUL REQUIRED]"
     : "\u{1F3F9} \u{26A1} [RANGE RANGER: TACTICAL REBALANCE]";
 
+  let pressureGauge = "⚪ Neutral Chop (Balanced Flow)";
+  if (marketFlow) {
+    const pPct = (marketFlow.netPressure * 100).toFixed(0);
+    if (marketFlow.netPressure >= 0.25) {
+      pressureGauge = `🟢 Net Buying Pressure (+${pPct}%)`;
+    } else if (marketFlow.netPressure <= -0.25) {
+      pressureGauge = `🔴 Net Selling Pressure (${pPct}%)`;
+    } else {
+      pressureGauge = `⚪ Neutral Chop (${pPct >= 0 ? "+" : ""}${pPct}%)`;
+    }
+  }
+
+  const volText = marketFlow?.volatilityScore
+    ? `${marketFlow.volatilityScore.toFixed(2)}x (${marketFlow.volatilityScore >= 1.2 ? "Elevated" : marketFlow.volatilityScore <= 0.85 ? "Quiet" : "Normal"})`
+    : "1.00x (Normal)";
+
   const staleLines = staleOrders.length > 0
     ? staleOrders.map((s) => `  \u2022 Cancel Order #${s.orderId}: ${s.pRange || "out-of-market"}`)
     : ["  \u2022 None"];
 
   const buyLines = buyBands.length > 0
-    ? buyBands.map((b) => `  \u2022 Buy #${b.bandIndex}: ${b.targetPriceRange} ($${b.usdcBudget} USDC)`)
+    ? buyBands.map((b) => `  \u2022 Tier ${b.bandIndex}: ${b.targetPriceRange} ($${b.usdcBudget} USDC)`)
     : ["  \u2022 None"];
 
   const sellLines = sellBands.length > 0
-    ? sellBands.map((s) => `  \u2022 Sell #${s.bandIndex}: ${s.targetPriceRange} (${s.naraBudget} NARA)`)
+    ? sellBands.map((s) => `  \u2022 Tier ${s.bandIndex}: ${s.targetPriceRange} (${s.naraBudget.toLocaleString("en-US")} NARA)`)
     : ["  \u2022 None"];
 
+  const safeNaraFmt = (Number(safeNaraBalance) / 1e18).toLocaleString("en-US", { maximumFractionDigits: 0 });
   const div = "\u2501".repeat(20);
 
   return [
@@ -364,15 +624,17 @@ export function buildRangeRangerTelegramAlert({
     div,
     `\u{1F4CA} Trigger: ${reason}`,
     `\u{1F4B0} Current Spot: $${analysis.spotPrice.toFixed(4)} USDC`,
+    `\u{1F9ED} Market Flow: ${pressureGauge}`,
+    `\u{1F4C8} Volatility Multiplier: ${volText}`,
     `\u{1F9F1} Nearest Buy: ${analysis.closestBuy ? `$${analysis.closestBuy.pUpper.toFixed(4)}` : "None"} (${buyGapText})`,
     `\u{1F3AF} Nearest Sell: ${analysis.closestSell ? `$${analysis.closestSell.pLower.toFixed(4)}` : "None"}`,
     div,
-    `\u{1F3E6} Treasury Safe Available: $${formatUsdcNumber(Number(safeUsdcBalance) / 1e6)} USDC`,
+    `\u{1F3E6} Treasury Safe Reserves: $${formatUsdcNumber(Number(safeUsdcBalance) / 1e6)} USDC | ${safeNaraFmt} NARA`,
     `\u{1F5D1}\u{FE0F} Atomic Cancellations (${staleOrders.length} stale orders):`,
     ...staleLines,
-    `\u{1F7E2} Fresh Buy Ladder ($${buyBands.reduce((s, b) => s + b.usdcBudget, 0)} USDC):`,
+    `\u{1F7E2} Dynamic Buy Ladder (${buyBands.length} Tiers, $${buyBands.reduce((s, b) => s + b.usdcBudget, 0)} USDC):`,
     ...buyLines,
-    `\u{1F534} Fresh Sell Ladder (${sellBands.reduce((s, b) => s + b.naraBudget, 0)} NARA):`,
+    `\u{1F534} Dynamic Sell Ladder (${sellBands.length} Tiers, ${sellBands.reduce((s, b) => s + b.naraBudget, 0).toLocaleString("en-US")} NARA):`,
     ...sellLines,
     div,
     `\u{1F4C1} Atomic Safe Batch Generated: ${batchFilename}`,
@@ -497,8 +759,8 @@ export function buildAutonomousSuccessTelegramAlert({
     `\u{1F9F1} Confirmed in Block #${blockNumber} (Gas Used: ${gasUsed.toString()})`,
     div,
     `\u{1F5D1}\u{FE0F} Cancelled & Settled: ${staleOrders.length} stale orders`,
-    `\u{1F7E2} Deployed 4 Buy Bands ($${buyTotal} USDC)`,
-    `\u{1F534} Deployed 4 Sell Bands (${sellTotal} NARA)`,
+    `\u{1F7E2} Deployed ${buyBands.length} Buy Bands ($${buyTotal} USDC)`,
+    `\u{1F534} Deployed ${sellBands.length} Sell Bands (${sellTotal.toLocaleString("en-US")} NARA)`,
     `\u{1F3E6} Treasury Safe Available: $${formatUsdcNumber(Number(safeUsdcBalance) / 1e6)} USDC`,
     div,
     "\u2705 Order book is now perfectly centered around live market price.",

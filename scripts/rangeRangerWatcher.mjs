@@ -8,9 +8,12 @@ import {
   RANGE_MANAGER_ADDRESS,
   TREASURY_SAFE_ADDRESS,
   USDC_ADDRESS,
+  NARA_ADDRESS,
   RANGE_MANAGER_ABI,
   ERC20_ABI,
   analyzeGridLiquidity,
+  calculateMarketFlow,
+  calculateDynamicBudgets,
   synthesizeBuyBracket,
   synthesizeSellBracket,
   buildSafeBatchJson,
@@ -98,24 +101,57 @@ async function fetchOnChainState(client) {
     });
   }
 
-  const safeUsdcBalance = await client.readContract({
-    address: USDC_ADDRESS,
-    abi: ERC20_ABI,
-    functionName: "balanceOf",
-    args: [TREASURY_SAFE_ADDRESS],
-  });
+  const [safeUsdcBalance, safeNaraBalance] = await Promise.all([
+    client.readContract({
+      address: USDC_ADDRESS,
+      abi: ERC20_ABI,
+      functionName: "balanceOf",
+      args: [TREASURY_SAFE_ADDRESS],
+    }),
+    client.readContract({
+      address: NARA_ADDRESS,
+      abi: ERC20_ABI,
+      functionName: "balanceOf",
+      args: [TREASURY_SAFE_ADDRESS],
+    }),
+  ]);
 
   return {
     currentTick: poolState[1],
     sqrtPriceX96: poolState[0],
     activeOrders,
     safeUsdcBalance,
+    safeNaraBalance,
   };
 }
 
 async function executeCycle(client, lastState) {
   const state = await fetchOnChainState(client);
   const analysis = analyzeGridLiquidity(state.currentTick, state.activeOrders);
+
+  const marketFlow = await calculateMarketFlow({
+    client,
+    currentTick: state.currentTick,
+    lastPrice: lastState.lastAlertPrice,
+    activeOrders: state.activeOrders,
+  });
+
+  const dynamicBudgets = calculateDynamicBudgets({
+    safeUsdcBalance: state.safeUsdcBalance,
+    safeNaraBalance: state.safeNaraBalance,
+    marketFlow,
+    minUsdc: Number(process.env.RANGE_RANGER_MIN_USDC || "300"),
+    maxUsdc: Number(process.env.RANGE_RANGER_MAX_USDC || "2500"),
+    minNara: Number(process.env.RANGE_RANGER_MIN_NARA || "10000"),
+    maxNara: Number(process.env.RANGE_RANGER_MAX_NARA || "100000"),
+  });
+
+  const buyBudget = process.env.RANGE_RANGER_TRANCHE_USDC
+    ? Number(process.env.RANGE_RANGER_TRANCHE_USDC)
+    : dynamicBudgets.usdcBudget;
+  const sellBudget = process.env.RANGE_RANGER_TRANCHE_NARA
+    ? Number(process.env.RANGE_RANGER_TRANCHE_NARA)
+    : dynamicBudgets.naraBudget;
 
   const now = Date.now();
   let triggerReason = null;
@@ -140,18 +176,24 @@ async function executeCycle(client, lastState) {
   const isRateLimited = !shouldBypassRateLimit && timeSinceLastAlert < 30 * 60 * 1000;
 
   console.log(
-    `[${new Date().toISOString()}] Spot: $${analysis.spotPrice.toFixed(4)} | Nearest Buy: ${
-      analysis.closestBuyDistancePct !== null ? analysis.closestBuyDistancePct.toFixed(1) + "%" : "None"
-    } | Active Orders: ${analysis.activeBuyCount}B / ${analysis.activeSellCount}S | Safe USDC: $${(
+    `[${new Date().toISOString()}] Spot: $${analysis.spotPrice.toFixed(4)} | Flow: ${marketFlow.regime} (${(marketFlow.netPressure * 100).toFixed(0)}%) | Vol: ${marketFlow.volatilityScore.toFixed(2)}x | Orders: ${analysis.activeBuyCount}B / ${analysis.activeSellCount}S | Safe: $${(
       Number(state.safeUsdcBalance) / 1e6
-    ).toFixed(2)}`
+    ).toFixed(2)} USDC, ${(Number(state.safeNaraBalance) / 1e18).toFixed(0)} NARA | Budget: $${buyBudget} USDC / ${sellBudget.toLocaleString("en-US")} NARA`
   );
 
   if (triggerReason && (!isRateLimited || testNotification)) {
-    console.log(`âš¡ Trigger fired: ${triggerReason}`);
+    console.log(`⚡ Trigger fired: ${triggerReason}`);
 
-    const buyBands = synthesizeBuyBracket(analysis.spotPrice, trancheUsdc, state.currentTick);
-    const sellBands = synthesizeSellBracket(analysis.spotPrice, trancheNara, state.currentTick);
+    const buyBands = synthesizeBuyBracket(analysis.spotPrice, buyBudget, state.currentTick, {
+      netPressure: marketFlow.netPressure,
+      volatilityScore: marketFlow.volatilityScore,
+      tierCount: 5,
+    });
+    const sellBands = synthesizeSellBracket(analysis.spotPrice, sellBudget, state.currentTick, {
+      netPressure: marketFlow.netPressure,
+      volatilityScore: marketFlow.volatilityScore,
+      tierCount: 5,
+    });
     const safeBatch = buildSafeBatchJson({
       chainId: 8453,
       safeAddress: TREASURY_SAFE_ADDRESS,
@@ -215,6 +257,8 @@ async function executeCycle(client, lastState) {
       sellBands,
       staleOrders: analysis.staleOrders,
       safeUsdcBalance: state.safeUsdcBalance,
+      safeNaraBalance: state.safeNaraBalance,
+      marketFlow,
       batchFilename: `deployments/${batchFilename}`,
     });
 

@@ -27,3 +27,7 @@ yarn-error.log*
 
 # Deployments / Batches
 deployments/
+
+# Local IDE config
+opencode.json
+
