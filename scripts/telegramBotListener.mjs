@@ -1,6 +1,21 @@
 import { createPublicClient, http, isAddress, getAddress, formatUnits, formatEther } from "viem";
 import { base } from "viem/chains";
 import pg from "pg";
+import {
+  RANGE_MANAGER_ADDRESS,
+  TREASURY_SAFE_ADDRESS,
+  USDC_ADDRESS,
+  NARA_ADDRESS,
+  RANGE_MANAGER_ABI,
+  ERC20_ABI as RANGE_ERC20_ABI,
+  tickToPriceUsdc,
+  analyzeGridLiquidity,
+  calculateMarketFlow,
+  calculateDynamicBudgets,
+  synthesizeBuyBracket,
+  synthesizeSellBracket,
+  formatUsdcNumber,
+} from "./rangeRangerRuntime.mjs";
 
 const botToken = process.env.TELEGRAM_BOT_TOKEN?.trim();
 const dbUrl = process.env.DATABASE_URL?.trim();
@@ -89,10 +104,26 @@ const nftAbi = [
   { type: "function", name: "balanceOf", stateMutability: "view", inputs: [{ name: "owner", type: "address" }], outputs: [{ type: "uint256" }] },
 ];
 
+let botUsername = "";
+
 async function registerMenuCommands() {
+  try {
+    const meRes = await fetch(`https://api.telegram.org/bot${botToken}/getMe`);
+    if (meRes.ok) {
+      const meData = await meRes.json();
+      botUsername = (meData.result?.username || "").toLowerCase();
+      console.log(`🤖 Registered identity for @${botUsername || "bot"}`);
+    }
+  } catch (err) {
+    console.error("Error fetching bot identity:", err.message);
+  }
+
   const commands = [
     { command: "status", description: "📊 Live protocol status & supply" },
     { command: "health", description: "⏳ Engine epoch sync & keeper check" },
+    { command: "ranger", description: "🏹 Range Ranger status, bands & Safe reserves" },
+    { command: "rangerorders", description: "📋 Active on-chain range limit orders" },
+    { command: "recenter", description: "🎯 Live 4-tier rebalance bracket preview" },
     { command: "whales", description: "Largest indexed NARA lock balances" },
     { command: "cliffs", description: "⏱️ Upcoming 24h & 7d unlock cliffs" },
     { command: "contracts", description: "📜 Verified v4 contract addresses" },
@@ -113,11 +144,15 @@ async function registerMenuCommands() {
 
 async function sendTg(targetChatId, text) {
   try {
-    await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+    const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ chat_id: targetChatId, text, parse_mode: "Markdown" }),
     });
+    if (!res.ok) {
+      const errBody = await res.text().catch(() => "");
+      console.error(`Telegram send failed (${res.status}): ${errBody}`);
+    }
   } catch (err) {
     console.error("Error sending message to Telegram:", err.message);
   }
@@ -140,13 +175,22 @@ async function queryDb(query, params = []) {
 async function handleCommand(msg) {
   const text = (msg.text || "").trim();
   const fromChatId = msg.chat?.id;
-  if (!fromChatId) return;
+  if (!fromChatId || !text.startsWith("/")) return;
 
   const parts = text.split(/\s+/);
-  const cmd = parts[0].toLowerCase();
+  const rawCmd = (parts[0] || "").toLowerCase();
+
+  let cmd = rawCmd;
+  if (rawCmd.includes("@")) {
+    const [baseCmd, targetBot] = rawCmd.split("@");
+    if (targetBot && botUsername && targetBot !== botUsername) {
+      return;
+    }
+    cmd = baseCmd;
+  }
   const arg = parts[1];
 
-  console.log(`Received command ${cmd} from ${fromChatId}`);
+  console.log(`Received command ${cmd} (raw: ${rawCmd}) from ${fromChatId}`);
 
   if (cmd === "/start" || cmd === "/help") {
     const helpMsg = [
@@ -156,6 +200,9 @@ async function handleCommand(msg) {
       "",
       "• `/status` — Live system status & block height",
       "• `/health` — Engine epoch sync & backlog check",
+      "• `/ranger` — 🏹 Range Ranger status, bands & Safe reserves",
+      "• `/rangerorders` — 📋 Active on-chain range limit orders",
+      "• `/recenter` — 🎯 Live 4-tier rebalance bracket preview",
       "• `/whales` — Largest indexed NARA lock balances",
       "• `/cliffs` — Upcoming 24h & 7d unlock cliffs",
       "• `/contracts` — Verified v4 contract addresses",
@@ -193,15 +240,21 @@ async function handleCommand(msg) {
         client.getBlockNumber(),
       ]);
       const backlog = Number(currentEpoch) - Number(epochState);
-      const isHealthy = backlog <= 1;
+      let statusDisplay = "🟢 *Status:* Synchronized (GREEN)";
+      if (backlog > 8) {
+        statusDisplay = "🔴 *Status:* Backlog Exceeded JIT Limit (" + backlog + " epochs)";
+      } else if (backlog > 4) {
+        statusDisplay = "🟡 *Status:* Backlog Pending Routine Batch (" + backlog + " epochs)";
+      }
 
       const healthMsg = [
         "⏳ *NARA Engine Epoch Health*",
         "━━━━━━━━━━━━━━━━━━━━",
-        (isHealthy ? "🟢 *Status:* Synchronized (GREEN)" : "🟡 *Status:* Backlog Detected"),
+        statusDisplay,
         "• *Current Epoch:* #" + currentEpoch,
         "• *Settled Epoch:* #" + epochState,
         "• *Backlog:* " + backlog + " epoch(s)",
+        "• *Routine Schedule:* Hourly batch (up to 4 epochs)",
         "• *JIT Settlement Limit:* 8 epochs",
         "• *Block:* #" + blockNumber,
         "━━━━━━━━━━━━━━━━━━━━"
@@ -209,6 +262,270 @@ async function handleCommand(msg) {
       return sendTg(fromChatId, healthMsg);
     } catch (err) {
       return sendTg(fromChatId, "❌ Error reading epoch state: " + err.message);
+    }
+  }
+
+  async function fetchRangeRangerState() {
+    const poolState = await client.readContract({
+      address: RANGE_MANAGER_ADDRESS,
+      abi: RANGE_MANAGER_ABI,
+      functionName: "currentPoolState",
+    });
+
+    const [orderIds] = await client.readContract({
+      address: RANGE_MANAGER_ADDRESS,
+      abi: RANGE_MANAGER_ABI,
+      functionName: "getActiveOrderIds",
+      args: [0n, 50n],
+    });
+
+    const activeOrders = [];
+    for (const id of orderIds) {
+      try {
+        const raw = await client.readContract({
+          address: RANGE_MANAGER_ADDRESS,
+          abi: RANGE_MANAGER_ABI,
+          functionName: "getOrder",
+          args: [id],
+        });
+        activeOrders.push({
+          orderId: id,
+          tokenId: raw[0],
+          inputAmount: raw[1],
+          minimumOutputAmount: raw[2],
+          strategyHash: raw[3],
+          liquidity: raw[4],
+          tickLower: raw[5],
+          tickUpper: raw[6],
+          side: raw[10],
+          status: raw[11],
+        });
+      } catch {}
+    }
+
+    const [safeUsdcBalance, safeNaraBalance, isClean] = await Promise.all([
+      client.readContract({
+        address: USDC_ADDRESS,
+        abi: RANGE_ERC20_ABI,
+        functionName: "balanceOf",
+        args: [TREASURY_SAFE_ADDRESS],
+      }).catch(() => 0n),
+      client.readContract({
+        address: NARA_ADDRESS,
+        abi: RANGE_ERC20_ABI,
+        functionName: "balanceOf",
+        args: [TREASURY_SAFE_ADDRESS],
+      }).catch(() => 0n),
+      client.readContract({
+        address: RANGE_MANAGER_ADDRESS,
+        abi: RANGE_MANAGER_ABI,
+        functionName: "assertOperationalClean",
+      }).catch(() => false),
+    ]);
+
+    const analysis = analyzeGridLiquidity(poolState[1], activeOrders);
+    const marketFlow = await calculateMarketFlow({
+      client,
+      currentTick: poolState[1],
+      activeOrders,
+    });
+    const dynamicBudgets = calculateDynamicBudgets({
+      safeUsdcBalance,
+      safeNaraBalance,
+      marketFlow,
+    });
+
+    return {
+      currentTick: poolState[1],
+      sqrtPriceX96: poolState[0],
+      activeOrders,
+      safeUsdcBalance,
+      safeNaraBalance,
+      isClean,
+      analysis,
+      marketFlow,
+      dynamicBudgets,
+    };
+  }
+
+  if (cmd === "/ranger" || cmd === "/range" || cmd === "/rangestatus") {
+    try {
+      const state = await fetchRangeRangerState();
+      const { analysis, safeUsdcBalance, safeNaraBalance, isClean, marketFlow, dynamicBudgets } = state;
+      const spot = analysis.spotPrice;
+
+      const nearestBuyText = analysis.closestBuy
+        ? `$${analysis.closestBuy.pUpper.toFixed(4)} (${analysis.closestBuyDistancePct.toFixed(1)}% below spot)`
+        : "None (No active support)";
+
+      const nearestSellText = analysis.closestSell
+        ? `$${analysis.closestSell.pLower.toFixed(4)} (${analysis.closestSellDistancePct !== null ? analysis.closestSellDistancePct.toFixed(1) + "% above spot" : "Active"})`
+        : "None (No active resistance)";
+
+      let statusIcon = "🟢 Optimal Range Coverage";
+      if (analysis.hasLiquidityGap) {
+        statusIcon = "⚠️ Liquidity Gap Detected (Atomic Overhaul Needed)";
+      } else if (analysis.staleOrders.length > 0) {
+        statusIcon = `🟡 ${analysis.staleOrders.length} Stale Order(s) Detected`;
+      }
+
+      let pressureGauge = "⚪ Neutral Chop (Balanced Flow)";
+      if (marketFlow) {
+        const pPct = (marketFlow.netPressure * 100).toFixed(0);
+        if (marketFlow.netPressure >= 0.25) {
+          pressureGauge = `🟢 Net Buying (+${pPct}%)`;
+        } else if (marketFlow.netPressure <= -0.25) {
+          pressureGauge = `🔴 Net Selling (${pPct}%)`;
+        } else {
+          pressureGauge = `⚪ Neutral Chop (${pPct >= 0 ? "+" : ""}${pPct}%)`;
+        }
+      }
+
+      const safeUsdcFmt = (Number(safeUsdcBalance) / 1e6).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const safeNaraFmt = (Number(safeNaraBalance) / 1e18).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+      const rangerMsg = [
+        "🏹 *NARA Treasury Range Ranger Status*",
+        "━━━━━━━━━━━━━━━━━━━━",
+        `• *Grid Status:* ${statusIcon}`,
+        `• *Spot Price:* \`$${spot.toFixed(4)} USDC\``,
+        `• *Pool Tick:* \`${state.currentTick}\``,
+        `• *Market Pressure:* ${pressureGauge}`,
+        `• *Volatility Multiplier:* ${marketFlow.volatilityScore.toFixed(2)}x`,
+        "━━━━━━━━━━━━━━━━━━━━",
+        "📊 *Liquidity Topology:*",
+        `• *Nearest Buy Floor:* ${nearestBuyText}`,
+        `• *Nearest Sell Wall:* ${nearestSellText}`,
+        `• *Active Orders:* ${analysis.activeBuyCount} Buy / ${analysis.activeSellCount} Sell (${analysis.staleOrders.length} stale)`,
+        "━━━━━━━━━━━━━━━━━━━━",
+        "🏦 *Treasury Safe Reserves:*",
+        `• *USDC Available:* \`$${safeUsdcFmt}\``,
+        `• *NARA Available:* \`${safeNaraFmt} NARA\``,
+        `• *Adaptive Sizing:* \`$${dynamicBudgets.usdcBudget} USDC / ${dynamicBudgets.naraBudget.toLocaleString()} NARA\``,
+        `• *Operational Guard:* ${isClean ? "🟢 Clean (`assertOperationalClean` OK)" : "🟡 In Transit"}`,
+        "━━━━━━━━━━━━━━━━━━━━",
+        "💡 *Available Ranger Commands:*",
+        "• `/rangerorders` — View active onchain limit orders",
+        "• `/recenter` — Preview 5-tier adaptive rebalance bracket",
+      ].join("\n");
+      return sendTg(fromChatId, rangerMsg);
+    } catch (err) {
+      return sendTg(fromChatId, "❌ Error reading Range Ranger state: " + err.message);
+    }
+  }
+
+  if (cmd === "/rangerorders" || cmd === "/orders" || cmd === "/rangeorders") {
+    try {
+      const state = await fetchRangeRangerState();
+      const { activeOrders, analysis } = state;
+
+      if (activeOrders.length === 0) {
+        return sendTg(fromChatId, "📋 *No active range limit orders found on-chain.*");
+      }
+
+      const buyOrders = [];
+      const sellOrders = [];
+
+      for (const order of activeOrders) {
+        const pUpper = tickToPriceUsdc(order.tickLower);
+        const pLower = tickToPriceUsdc(order.tickUpper);
+        const pMin = Math.min(pLower, pUpper);
+        const pMax = Math.max(pLower, pUpper);
+
+        // OrderSide: 0 = SellNara (input is NARA 18 decimals), 1 = BuyNara (input is USDC 6 decimals)
+        if (Number(order.side) === 1) {
+          const usdcIn = (Number(order.inputAmount) / 1e6).toFixed(2);
+          buyOrders.push({
+            pMax,
+            text: `• *#${order.orderId}:* \`$${pMin.toFixed(4)}–$${pMax.toFixed(4)}\` ($${usdcIn} USDC)`,
+          });
+        } else {
+          const naraIn = (Number(order.inputAmount) / 1e18).toLocaleString("en-US", { maximumFractionDigits: 0 });
+          sellOrders.push({
+            pMin,
+            text: `• *#${order.orderId}:* \`$${pMin.toFixed(4)}–$${pMax.toFixed(4)}\` (${naraIn} NARA)`,
+          });
+        }
+      }
+
+      // Sort buy orders descending (highest buy floor closest to spot first)
+      buyOrders.sort((a, b) => b.pMax - a.pMax);
+      // Sort sell orders ascending (lowest sell wall closest to spot first)
+      sellOrders.sort((a, b) => a.pMin - b.pMin);
+
+      const buyLines = buyOrders.map((o) => o.text);
+      const sellLines = sellOrders.map((o) => o.text);
+
+      const ordersMsg = [
+        "📋 *NARA Active Range Limit Orders*",
+        "━━━━━━━━━━━━━━━━━━━━",
+        `• *Spot Price:* \`$${analysis.spotPrice.toFixed(4)} USDC\``,
+        `• *Total Active:* ${activeOrders.length} orders (${analysis.staleOrders.length} stale)`,
+        "",
+        `🟢 *Active Buy Floor Orders (${buyLines.length}):*`,
+        buyLines.length > 0 ? buyLines.join("\n") : "  _None_",
+        "",
+        `🔴 *Active Sell Wall Orders (${sellLines.length}):*`,
+        sellLines.length > 0 ? sellLines.join("\n") : "  _None_",
+        "━━━━━━━━━━━━━━━━━━━━",
+        "💡 Use `/recenter` to preview a freshly balanced 5-tier adaptive bracket around spot.",
+      ].join("\n");
+      return sendTg(fromChatId, ordersMsg);
+    } catch (err) {
+      return sendTg(fromChatId, "❌ Error reading Range orders: " + err.message);
+    }
+  }
+
+  if (cmd === "/recenter" || cmd === "/ranger_recenter") {
+    try {
+      const state = await fetchRangeRangerState();
+      const { analysis, currentTick, marketFlow, dynamicBudgets } = state;
+      const spot = analysis.spotPrice;
+
+      const buyBands = synthesizeBuyBracket(spot, dynamicBudgets.usdcBudget, currentTick, {
+        netPressure: marketFlow.netPressure,
+        volatilityScore: marketFlow.volatilityScore,
+        tierCount: 5,
+      });
+      const sellBands = synthesizeSellBracket(spot, dynamicBudgets.naraBudget, currentTick, {
+        netPressure: marketFlow.netPressure,
+        volatilityScore: marketFlow.volatilityScore,
+        tierCount: 5,
+      });
+
+      const buyLines = buyBands.map((b) => `• *Tier ${b.bandIndex}:* \`${b.targetPriceRange}\` ($${b.usdcBudget} USDC)`);
+      const sellLines = sellBands.map((s) => `• *Tier ${s.bandIndex}:* \`${s.targetPriceRange}\` (${s.naraBudget.toLocaleString("en-US")} NARA)`);
+
+      let flowStatus = "⚪ Neutral Chop (Balanced Spreads)";
+      const pPct = (marketFlow.netPressure * 100).toFixed(0);
+      if (marketFlow.netPressure >= 0.25) {
+        flowStatus = `🟢 Net Buying (+${pPct}%) — Ratchet Floor Skew`;
+      } else if (marketFlow.netPressure <= -0.25) {
+        flowStatus = `🔴 Net Selling (${pPct}%) — Deep Value DCA Skew`;
+      }
+
+      const recenterMsg = [
+        "🎯 *Recommended 5-Tier Adaptive Recenter Bracket*",
+        "━━━━━━━━━━━━━━━━━━━━",
+        `• *Current Spot:* \`$${spot.toFixed(4)} USDC\``,
+        `• *Current Tick:* \`${currentTick}\``,
+        `• *Market Pressure:* ${flowStatus}`,
+        `• *Volatility Multiplier:* ${marketFlow.volatilityScore.toFixed(2)}x`,
+        `• *Stale Orders to Cancel:* ${analysis.staleOrders.length}`,
+        "━━━━━━━━━━━━━━━━━━━━",
+        `🟢 *5-Tier Buy Floor ($${dynamicBudgets.usdcBudget} USDC dynamic budget):*`,
+        ...buyLines,
+        "",
+        `🔴 *5-Tier Sell Wall (${dynamicBudgets.naraBudget.toLocaleString("en-US")} NARA dynamic budget):*`,
+        ...sellLines,
+        "━━━━━━━━━━━━━━━━━━━━",
+        "⚙️ *To execute rebalance:*",
+        "• Autonomous Railway runner auto-rebalances when gap exceeds 20%",
+        "• Or execute via workspace terminal: `RANGERECENTER`",
+      ].join("\n");
+      return sendTg(fromChatId, recenterMsg);
+    } catch (err) {
+      return sendTg(fromChatId, "❌ Error calculating recenter bracket: " + err.message);
     }
   }
 
