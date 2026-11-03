@@ -22,6 +22,13 @@ import {
   ENGINE_OPS_ROUTER_ADDRESS,
   FINAL_ADMIN_ADDRESS,
   TREASURY_ADDRESS,
+  V5_EMISSION_RESERVE_ADDRESS,
+  V5_FORGE_ADDRESS,
+  V5_POOL_ORACLE_ADDRESS,
+  V5_POSITION_SALE_ADDRESS,
+  V5_PRINCIPAL_LEDGER_ADDRESS,
+  V5_REWARD_LEDGER_ADDRESS,
+  V5_TREASURY_RANGE_MANAGER_ADDRESS,
 } from "../config/contracts";
 import { emitAlert } from "./rule-engine/engine";
 import "./ecosystemIndex";
@@ -284,6 +291,13 @@ async function labelKnownProtocolWallets(db: any, blockNumber: bigint, timestamp
   appendContractLabels(CONTRACTS.bondVault.address, "NARABondVaultV4 contract");
   appendContractLabels(CONTRACTS.opsVault.address, "NARAOpsVaultV4 contract");
   if (ENGINE_OPS_ROUTER_ADDRESS) appendContractLabels(ENGINE_OPS_ROUTER_ADDRESS, "NARAEngineOpsRouterV1 contract");
+  if (V5_PRINCIPAL_LEDGER_ADDRESS) appendContractLabels(V5_PRINCIPAL_LEDGER_ADDRESS, "NARAPrincipalLedgerV5 contract");
+  if (V5_REWARD_LEDGER_ADDRESS) appendContractLabels(V5_REWARD_LEDGER_ADDRESS, "NARARewardLedgerV5 contract");
+  if (V5_EMISSION_RESERVE_ADDRESS) appendContractLabels(V5_EMISSION_RESERVE_ADDRESS, "NARAEmissionReserveV5 contract");
+  if (V5_FORGE_ADDRESS) appendContractLabels(V5_FORGE_ADDRESS, "NARAForgeV5 contract");
+  if (V5_POSITION_SALE_ADDRESS) appendContractLabels(V5_POSITION_SALE_ADDRESS, "NARAPositionSaleV5 contract");
+  if (V5_POOL_ORACLE_ADDRESS) appendContractLabels(V5_POOL_ORACLE_ADDRESS, "NARAPoolOracleV5 contract");
+  if (V5_TREASURY_RANGE_MANAGER_ADDRESS) appendContractLabels(V5_TREASURY_RANGE_MANAGER_ADDRESS, "NARATreasuryRangeManagerV2 contract");
 
   for (const [address, reason] of contractLabels) {
     await upsertWalletLabel(db, address, "contract", "protocol_config", 100, reason, blockNumber, timestamp);
@@ -483,6 +497,13 @@ function isKnownProtocolAddress(address: string): boolean {
   addConfigured(CONTRACTS.opsVault.address);
   if (approvedOpsRouter) known.add(approvedOpsRouter);
   if (approvedBreakGlassSafe) known.add(approvedBreakGlassSafe);
+  if (V5_PRINCIPAL_LEDGER_ADDRESS) known.add(normalizeAddress(V5_PRINCIPAL_LEDGER_ADDRESS));
+  if (V5_REWARD_LEDGER_ADDRESS) known.add(normalizeAddress(V5_REWARD_LEDGER_ADDRESS));
+  if (V5_EMISSION_RESERVE_ADDRESS) known.add(normalizeAddress(V5_EMISSION_RESERVE_ADDRESS));
+  if (V5_FORGE_ADDRESS) known.add(normalizeAddress(V5_FORGE_ADDRESS));
+  if (V5_POSITION_SALE_ADDRESS) known.add(normalizeAddress(V5_POSITION_SALE_ADDRESS));
+  if (V5_POOL_ORACLE_ADDRESS) known.add(normalizeAddress(V5_POOL_ORACLE_ADDRESS));
+  if (V5_TREASURY_RANGE_MANAGER_ADDRESS) known.add(normalizeAddress(V5_TREASURY_RANGE_MANAGER_ADDRESS));
 
   if (TREASURY_ADDRESS) known.add(normalizeAddress(TREASURY_ADDRESS));
   if (FINAL_ADMIN_ADDRESS) known.add(normalizeAddress(FINAL_ADMIN_ADDRESS));
@@ -1053,6 +1074,192 @@ ponder.on("NARAEngine:TokenRewardsClaimed", async ({ event, context }) => {
   });
 });
 
+// 2b. V5 Modular Engine / PrincipalLedger / RewardLedger Event Handlers
+ponder.on("NARAEngine:PositionCreated", async ({ event, context }) => {
+  const lockId = event.args.positionId;
+  const id = `${chainId}-${lockId}`;
+  const timestamp = Number(event.block.timestamp);
+  const pos = event.args.position;
+  const amount = pos.principal;
+  const activationEpoch = pos.activation;
+  const unlockEpoch = pos.maturity;
+  const weight = pos.rewardWeight;
+
+  await context.db.insert(locks).values({
+    id,
+    chainId,
+    lockId,
+    user: event.args.owner,
+    amount,
+    activationEpoch,
+    unlockEpoch,
+    weight,
+    status: "locked",
+    blockNumber: event.block.number,
+    txHash: event.transaction.hash,
+    logIndex: event.log.logIndex,
+    timestamp,
+  }).onConflictDoUpdate({
+    user: event.args.owner,
+    amount,
+    activationEpoch,
+    unlockEpoch,
+    weight,
+    status: "locked",
+    blockNumber: event.block.number,
+    txHash: event.transaction.hash,
+    logIndex: event.log.logIndex,
+    timestamp,
+  });
+
+  await ensureWallet(context.db, event.args.owner, event.block.number, timestamp);
+
+  const durationEpochs = BigInt(pos.duration);
+  const soonAmounts = unlockSoonAmounts(amount, durationEpochs, timestamp);
+
+  await recordWalletActivity(context, event, event.args.owner, "lock", "NARAEngine", {
+    amount,
+    token: CONTRACTS.token.address,
+    positionId: lockId,
+  });
+  await updateWalletScore(context.db, event.args.owner, timestamp, {
+    rawPositionCount: 1,
+    lockedAmount: amount,
+    activeLockedAmount: amount,
+    unlocking24hAmount: soonAmounts.unlocking24hAmount,
+    unlocking7dAmount: soonAmounts.unlocking7dAmount,
+    durationSampleEpochs: durationEpochs,
+    durationSampleCount: 1,
+    convictionScore: lockConvictionScore(amount, durationEpochs, true, 0n),
+    riskScore: lockRiskScore(amount, durationEpochs, timestamp),
+  });
+
+  if (amount >= whaleLockedAmount) {
+    await upsertWalletLabel(context.db, event.args.owner, "whale", "position_score", 90, "Wallet locked at or above the configured whale threshold.", event.block.number, timestamp);
+    await emitAlert(context.db, {
+      ruleId: "wallet_concentration_above_threshold",
+      fingerprintParts: [event.args.owner],
+      txHash: event.transaction.hash,
+      blockNumber: event.block.number,
+      wallet: normalizeAddress(event.args.owner),
+      positionId: lockId,
+      amount,
+      viewName: "wallet_exposure_summary",
+      sourceTable: "locks",
+      sourceRowId: id,
+      observedValue: amount.toString(),
+      thresholdValue: whaleLockedAmount.toString(),
+      timestamp,
+    });
+  }
+  if (durationEpochs <= shortTermDurationEpochs) {
+    await upsertWalletLabel(context.db, event.args.owner, "short_term_holder", "position_score", 80, "Wallet opened a short-duration lock.", event.block.number, timestamp);
+    await emitAlert(context.db, {
+      ruleId: "short_duration_lock_concentration",
+      fingerprintParts: [event.args.owner],
+      txHash: event.transaction.hash,
+      blockNumber: event.block.number,
+      wallet: normalizeAddress(event.args.owner),
+      positionId: lockId,
+      amount,
+      viewName: "wallet_exposure_summary",
+      sourceTable: "locks",
+      sourceRowId: id,
+      observedValue: durationEpochs.toString(),
+      thresholdValue: shortTermDurationEpochs.toString(),
+      timestamp,
+    });
+  }
+  if (durationEpochs >= longTermDurationEpochs) {
+    await upsertWalletLabel(context.db, event.args.owner, "long_term_holder", "position_score", 80, "Wallet opened a long-duration lock.", event.block.number, timestamp);
+  }
+});
+
+ponder.on("NARAEngine:PrincipalWithdrawn", async ({ event, context }) => {
+  const lockId = event.args.positionId;
+  const id = `${chainId}-${lockId}`;
+  const timestamp = Number(event.block.timestamp);
+
+  const existing = await context.db.find(locks, { id });
+  if (existing) {
+    await context.db.update(locks, { id }).set({
+      status: "unlocked",
+      unlockedAtBlock: event.block.number,
+      unlockedAtTimestamp: timestamp,
+      unlockTxHash: event.transaction.hash,
+      unlockTo: event.args.recipient,
+    });
+  }
+
+  await recordWalletActivity(context, event, event.args.recipient, "unlock", "NARAEngine", {
+    amount: event.args.amount,
+    token: CONTRACTS.token.address,
+    positionId: lockId,
+  });
+  await updateWalletScore(context.db, event.args.recipient, timestamp, {
+    activeLockedAmount: -event.args.amount,
+    unlockedAmount: event.args.amount,
+    riskScore: amountScore(event.args.amount) / 5n,
+  });
+});
+
+ponder.on("NARAEngine:RewardClaimed", async ({ event, context }) => {
+  const id = `${chainId}-${event.transaction.hash}-${event.log.logIndex}`;
+  const timestamp = Number(event.block.timestamp);
+  const asset = Number(event.args.asset);
+  const isNara = asset === 0;
+  const isEth = asset === 1;
+  const rewardToken = isNara ? CONTRACTS.token.address : isEth ? ZERO_ADDRESS : (process.env.V4_USDC_TOKEN || ZERO_ADDRESS);
+  const eventType = isNara ? "claim_nara" : isEth ? "claim_eth" : "claim_token";
+
+  await context.db.insert(claims).values({
+    id,
+    chainId,
+    user: event.args.recipient,
+    rewardToken,
+    amount: event.args.amount,
+    naraFeeAmount: 0n,
+    tokenFeeAmount: 0n,
+    blockNumber: event.block.number,
+    txHash: event.transaction.hash,
+    logIndex: event.log.logIndex,
+    timestamp,
+  }).onConflictDoNothing();
+
+  await recordWalletActivity(context, event, event.args.recipient, eventType, "NARAEngine", {
+    amount: event.args.amount,
+    token: rewardToken,
+    positionId: event.args.positionId,
+    suffix: `asset-${asset}`,
+  });
+  await updateWalletScore(context.db, event.args.recipient, timestamp, {
+    claimCount: 1,
+    claimNaraAmount: isNara ? event.args.amount : 0n,
+    claimEthAmount: isEth ? event.args.amount : 0n,
+    claimTokenAmount: !isNara && !isEth ? event.args.amount : 0n,
+    convictionScore: 25n,
+  });
+});
+
+ponder.on("NARAEngine:EpochSettled", async ({ event, context }) => {
+  const id = `${chainId}-${event.transaction.hash}-${event.log.logIndex}`;
+  const timestamp = Number(event.block.timestamp);
+
+  await context.db.insert(admin_events).values({
+    id,
+    chainId,
+    eventType: "v5_epoch_settled",
+    contractAddress: event.log.address,
+    actor: event.transaction.from,
+    target: event.args.epoch.toString(),
+    valueNew: event.args.settlement.delivered.toString(),
+    blockNumber: event.block.number,
+    txHash: event.transaction.hash,
+    logIndex: event.log.logIndex,
+    timestamp,
+  }).onConflictDoNothing();
+});
+
 // 3. Engine Ops Router Observed Event Handlers
 ponder.on("NARAEngineOpsRouterV1:EngineConfigProposedObserved", async ({ event, context }) => {
   await recordOpsRouterEvent(context, event, "engine_config_proposed");
@@ -1124,6 +1331,40 @@ ponder.on("NARAEngine.withdrawTreasuryEthFees()", async ({ event, context }) => 
 });
 
 // 5. NFT Wrapping Handlers
+ponder.on("NARAPositionNFT:ReceiptMinted", async ({ event, context }) => {
+  const tokenId = positionTokenId(event.args.tokenId);
+  const timestamp = Number(event.block.timestamp);
+
+  await recordPositionEvent(context, event, "v5_receipt_minted", {
+    tokenId,
+    positionId: event.args.positionId,
+    amount: null,
+    metadata: {
+      generation: event.args.generation,
+      kind: event.args.kind,
+    },
+  });
+
+  await context.db.insert(nfts).values({
+    tokenId,
+    chainId,
+    tokenIdRaw: event.args.tokenId,
+    positionId: event.args.positionId,
+    minter: event.transaction.from,
+    owner: event.transaction.from,
+    positionAccount: ZERO_ADDRESS,
+    principalAmount: 0n,
+    durationEpochs: 0n,
+    tier: 0,
+    isGenesis: 0,
+    isEternal: 0,
+    mintedAtBlock: event.block.number,
+    mintedAtTimestamp: timestamp,
+    lastOwnerUpdateBlock: event.block.number,
+    lastOwnerUpdateTimestamp: timestamp,
+  }).onConflictDoNothing();
+});
+
 ponder.on("NARAPositionNFT:PositionMinted", async ({ event, context }) => {
   const tokenId = positionTokenId(event.args.tokenId);
   const timestamp = Number(event.block.timestamp);

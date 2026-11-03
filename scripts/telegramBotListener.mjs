@@ -1,21 +1,6 @@
 import { createPublicClient, http, isAddress, getAddress, formatUnits, formatEther } from "viem";
 import { base } from "viem/chains";
 import pg from "pg";
-import {
-  RANGE_MANAGER_ADDRESS,
-  TREASURY_SAFE_ADDRESS,
-  USDC_ADDRESS,
-  NARA_ADDRESS,
-  RANGE_MANAGER_ABI,
-  ERC20_ABI as RANGE_ERC20_ABI,
-  tickToPriceUsdc,
-  analyzeGridLiquidity,
-  calculateMarketFlow,
-  calculateDynamicBudgets,
-  synthesizeBuyBracket,
-  synthesizeSellBracket,
-  formatUsdcNumber,
-} from "./rangeRangerRuntime.mjs";
 
 const botToken = process.env.TELEGRAM_BOT_TOKEN?.trim();
 const dbUrl = process.env.DATABASE_URL?.trim();
@@ -49,6 +34,8 @@ const rpcUrl = requiredEnv("BASE_RPC_URL");
 const engineAddress = requiredAddress("V4_ENGINE");
 const tokenAddress = requiredAddress("V4_NARA_TOKEN");
 const nftAddress = safeGetAddress(process.env.V4_POSITION_NFT);
+const configuredPrincipalAddress = safeGetAddress(process.env.V5_PRINCIPAL_LEDGER || process.env.V4_PRINCIPAL_LEDGER);
+const configuredRewardAddress = safeGetAddress(process.env.V5_REWARD_LEDGER || process.env.V4_REWARD_LEDGER);
 const hookAddress = requiredAddress("V4_LIQUIDITY_GROWTH_HOOK");
 const deployerAddress = requiredAddress("DEPLOYER_ADDRESS").toLowerCase();
 const treasuryAddress = requiredAddress("V4_TREASURY_ADDRESS").toLowerCase();
@@ -59,6 +46,34 @@ const client = createPublicClient({
 });
 
 const engineAbi = [
+  {
+    type: "function",
+    name: "clock",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{
+      name: "c",
+      type: "tuple",
+      components: [
+        { name: "started", type: "bool" },
+        { name: "genesisTimestamp", type: "uint64" },
+        { name: "wallEpoch", type: "uint64" },
+        { name: "nextEpochToClose", type: "uint64" },
+        { name: "backlog", type: "uint64" },
+        { name: "nextBoundaryTimestamp", type: "uint256" },
+      ],
+    }],
+  },
+  {
+    type: "function",
+    name: "financialModules",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [
+      { name: "principal", type: "address" },
+      { name: "rewards", type: "address" },
+    ],
+  },
   { type: "function", name: "currentEpoch", stateMutability: "view", inputs: [], outputs: [{ type: "uint64" }] },
   { type: "function", name: "epochState", stateMutability: "view", inputs: [], outputs: [{ name: "epoch", type: "uint64" }] },
   { type: "function", name: "nextPositionId", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
@@ -95,6 +110,104 @@ const engineAbi = [
   },
 ];
 
+const principalAbi = [
+  { type: "function", name: "nextPositionId", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  {
+    type: "function",
+    name: "positionHead",
+    stateMutability: "view",
+    inputs: [{ name: "id", type: "uint256" }],
+    outputs: [{
+      type: "tuple",
+      components: [
+        { name: "generationOwner", type: "address" },
+        { name: "generation", type: "uint64" },
+        { name: "createdEpoch", type: "uint64" },
+        { name: "activation", type: "uint64" },
+        { name: "maturity", type: "uint64" },
+        { name: "effectiveEnd", type: "uint64" },
+        { name: "duration", type: "uint32" },
+        { name: "principal", type: "uint256" },
+        { name: "modelWeight", type: "uint256" },
+        { name: "rewardWeight", type: "uint256" },
+        { name: "earlyExitEnabled", type: "bool" },
+        { name: "earlyExitBps", type: "uint16" },
+        { name: "penalty", type: "uint256" },
+        { name: "penaltyCapacityReserved", type: "uint256" },
+        { name: "withdrawn", type: "bool" },
+        { name: "termsHash", type: "bytes32" },
+      ],
+    }],
+  },
+];
+
+const rewardAbi = [
+  {
+    type: "function",
+    name: "claimCredit",
+    stateMutability: "view",
+    inputs: [
+      { name: "id", type: "uint256" },
+      { name: "generation", type: "uint64" },
+      { name: "asset", type: "uint8" },
+    ],
+    outputs: [{
+      type: "tuple",
+      components: [
+        { name: "through", type: "uint64" },
+        { name: "unpaidScaled", type: "uint256" },
+        { name: "paid", type: "uint256" },
+      ],
+    }],
+  },
+];
+
+async function resolveV5Modules() {
+  if (configuredPrincipalAddress && configuredRewardAddress) {
+    return { principal: configuredPrincipalAddress, rewards: configuredRewardAddress };
+  }
+  try {
+    const [principal, rewards] = await client.readContract({
+      address: engineAddress,
+      abi: engineAbi,
+      functionName: "financialModules",
+    });
+    return {
+      principal: configuredPrincipalAddress || safeGetAddress(principal),
+      rewards: configuredRewardAddress || safeGetAddress(rewards),
+    };
+  } catch {
+    return { principal: configuredPrincipalAddress, rewards: configuredRewardAddress };
+  }
+}
+
+async function readEngineEpochSnapshot() {
+  try {
+    const clock = await client.readContract({
+      address: engineAddress,
+      abi: engineAbi,
+      functionName: "clock",
+    });
+    return {
+      currentEpoch: BigInt(clock.wallEpoch),
+      settledEpoch: BigInt(clock.nextEpochToClose),
+      backlog: Number(clock.backlog),
+      isV5: true,
+    };
+  } catch {
+    const [currentEpoch, epochState] = await Promise.all([
+      client.readContract({ address: engineAddress, abi: engineAbi, functionName: "currentEpoch" }),
+      client.readContract({ address: engineAddress, abi: engineAbi, functionName: "epochState" }),
+    ]);
+    return {
+      currentEpoch: BigInt(currentEpoch),
+      settledEpoch: BigInt(epochState),
+      backlog: Number(currentEpoch) - Number(epochState),
+      isV5: false,
+    };
+  }
+}
+
 const tokenAbi = [
   { type: "function", name: "balanceOf", stateMutability: "view", inputs: [{ name: "account", type: "address" }], outputs: [{ type: "uint256" }] },
   { type: "function", name: "totalSupply", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
@@ -121,9 +234,6 @@ async function registerMenuCommands() {
   const commands = [
     { command: "status", description: "📊 Live protocol status & supply" },
     { command: "health", description: "⏳ Engine epoch sync & keeper check" },
-    { command: "ranger", description: "🏹 Range Ranger status, bands & Safe reserves" },
-    { command: "rangerorders", description: "📋 Active on-chain range limit orders" },
-    { command: "recenter", description: "🎯 Live 4-tier rebalance bracket preview" },
     { command: "whales", description: "Largest indexed NARA lock balances" },
     { command: "cliffs", description: "⏱️ Upcoming 24h & 7d unlock cliffs" },
     { command: "contracts", description: "📜 Verified v4 contract addresses" },
@@ -172,6 +282,24 @@ async function queryDb(query, params = []) {
   }
 }
 
+// The treasury Range Ranger is permanently retired. Its former commands stay recognised so a
+// sender is told so, but the listener never reads range state or builds or previews ladders.
+const retiredRangeRangerCommands = new Set([
+  "/ranger",
+  "/range",
+  "/rangestatus",
+  "/rangerorders",
+  "/orders",
+  "/rangeorders",
+  "/recenter",
+  "/ranger_recenter",
+]);
+const rangeRangerRetiredMsg = [
+  "🏹 *Range Ranger retired*",
+  "━━━━━━━━━━━━━━━━━━━━",
+  "The treasury Range Ranger is permanently retired. This bot no longer reads range orders or builds, previews or executes rebalance ladders.",
+].join("\n");
+
 async function handleCommand(msg) {
   const text = (msg.text || "").trim();
   const fromChatId = msg.chat?.id;
@@ -200,9 +328,6 @@ async function handleCommand(msg) {
       "",
       "• `/status` — Live system status & block height",
       "• `/health` — Engine epoch sync & backlog check",
-      "• `/ranger` — 🏹 Range Ranger status, bands & Safe reserves",
-      "• `/rangerorders` — 📋 Active on-chain range limit orders",
-      "• `/recenter` — 🎯 Live 4-tier rebalance bracket preview",
       "• `/whales` — Largest indexed NARA lock balances",
       "• `/cliffs` — Upcoming 24h & 7d unlock cliffs",
       "• `/contracts` — Verified v4 contract addresses",
@@ -220,11 +345,14 @@ async function handleCommand(msg) {
   }
 
   if (cmd === "/contracts") {
+    const modules = await resolveV5Modules();
     const contractsMsg = [
-      "📜 *NARA Fixed v4 Deployed Contracts*",
+      "📜 *NARA Deployed Contracts*",
       "━━━━━━━━━━━━━━━━━━━━",
       "• *NARA Token:* `" + tokenAddress + "`",
       "• *NARA Engine:* `" + engineAddress + "`",
+      ...(modules.principal ? ["• *Principal Ledger:* `" + modules.principal + "`"] : []),
+      ...(modules.rewards ? ["• *Reward Ledger:* `" + modules.rewards + "`"] : []),
       nftAddress ? "• *Position NFT:* `" + nftAddress + "`" : "• *Position NFT:* not enabled in core profile",
       "• *Liquidity Hook:* `" + hookAddress + "`",
       "━━━━━━━━━━━━━━━━━━━━"
@@ -234,12 +362,13 @@ async function handleCommand(msg) {
 
   if (cmd === "/health") {
     try {
-      const [currentEpoch, epochState, blockNumber] = await Promise.all([
-        client.readContract({ address: engineAddress, abi: engineAbi, functionName: "currentEpoch" }),
-        client.readContract({ address: engineAddress, abi: engineAbi, functionName: "epochState" }),
+      const [snapshot, blockNumber] = await Promise.all([
+        readEngineEpochSnapshot(),
         client.getBlockNumber(),
       ]);
-      const backlog = Number(currentEpoch) - Number(epochState);
+      const currentEpoch = snapshot.currentEpoch;
+      const epochState = snapshot.settledEpoch;
+      const backlog = snapshot.backlog;
       let statusDisplay = "🟢 *Status:* Synchronized (GREEN)";
       if (backlog > 8) {
         statusDisplay = "🔴 *Status:* Backlog Exceeded JIT Limit (" + backlog + " epochs)";
@@ -265,268 +394,8 @@ async function handleCommand(msg) {
     }
   }
 
-  async function fetchRangeRangerState() {
-    const poolState = await client.readContract({
-      address: RANGE_MANAGER_ADDRESS,
-      abi: RANGE_MANAGER_ABI,
-      functionName: "currentPoolState",
-    });
-
-    const [orderIds] = await client.readContract({
-      address: RANGE_MANAGER_ADDRESS,
-      abi: RANGE_MANAGER_ABI,
-      functionName: "getActiveOrderIds",
-      args: [0n, 50n],
-    });
-
-    const activeOrders = [];
-    for (const id of orderIds) {
-      try {
-        const raw = await client.readContract({
-          address: RANGE_MANAGER_ADDRESS,
-          abi: RANGE_MANAGER_ABI,
-          functionName: "getOrder",
-          args: [id],
-        });
-        activeOrders.push({
-          orderId: id,
-          tokenId: raw[0],
-          inputAmount: raw[1],
-          minimumOutputAmount: raw[2],
-          strategyHash: raw[3],
-          liquidity: raw[4],
-          tickLower: raw[5],
-          tickUpper: raw[6],
-          side: raw[10],
-          status: raw[11],
-        });
-      } catch {}
-    }
-
-    const [safeUsdcBalance, safeNaraBalance, isClean] = await Promise.all([
-      client.readContract({
-        address: USDC_ADDRESS,
-        abi: RANGE_ERC20_ABI,
-        functionName: "balanceOf",
-        args: [TREASURY_SAFE_ADDRESS],
-      }).catch(() => 0n),
-      client.readContract({
-        address: NARA_ADDRESS,
-        abi: RANGE_ERC20_ABI,
-        functionName: "balanceOf",
-        args: [TREASURY_SAFE_ADDRESS],
-      }).catch(() => 0n),
-      client.readContract({
-        address: RANGE_MANAGER_ADDRESS,
-        abi: RANGE_MANAGER_ABI,
-        functionName: "assertOperationalClean",
-      }).catch(() => false),
-    ]);
-
-    const analysis = analyzeGridLiquidity(poolState[1], activeOrders);
-    const marketFlow = await calculateMarketFlow({
-      client,
-      currentTick: poolState[1],
-      activeOrders,
-    });
-    const dynamicBudgets = calculateDynamicBudgets({
-      safeUsdcBalance,
-      safeNaraBalance,
-      marketFlow,
-    });
-
-    return {
-      currentTick: poolState[1],
-      sqrtPriceX96: poolState[0],
-      activeOrders,
-      safeUsdcBalance,
-      safeNaraBalance,
-      isClean,
-      analysis,
-      marketFlow,
-      dynamicBudgets,
-    };
-  }
-
-  if (cmd === "/ranger" || cmd === "/range" || cmd === "/rangestatus") {
-    try {
-      const state = await fetchRangeRangerState();
-      const { analysis, safeUsdcBalance, safeNaraBalance, isClean, marketFlow, dynamicBudgets } = state;
-      const spot = analysis.spotPrice;
-
-      const nearestBuyText = analysis.closestBuy
-        ? `$${analysis.closestBuy.pUpper.toFixed(4)} (${analysis.closestBuyDistancePct.toFixed(1)}% below spot)`
-        : "None (No active support)";
-
-      const nearestSellText = analysis.closestSell
-        ? `$${analysis.closestSell.pLower.toFixed(4)} (${analysis.closestSellDistancePct !== null ? analysis.closestSellDistancePct.toFixed(1) + "% above spot" : "Active"})`
-        : "None (No active resistance)";
-
-      let statusIcon = "🟢 Optimal Range Coverage";
-      if (analysis.hasLiquidityGap) {
-        statusIcon = "⚠️ Liquidity Gap Detected (Atomic Overhaul Needed)";
-      } else if (analysis.staleOrders.length > 0) {
-        statusIcon = `🟡 ${analysis.staleOrders.length} Stale Order(s) Detected`;
-      }
-
-      let pressureGauge = "⚪ Neutral Chop (Balanced Flow)";
-      if (marketFlow) {
-        const pPct = (marketFlow.netPressure * 100).toFixed(0);
-        if (marketFlow.netPressure >= 0.25) {
-          pressureGauge = `🟢 Net Buying (+${pPct}%)`;
-        } else if (marketFlow.netPressure <= -0.25) {
-          pressureGauge = `🔴 Net Selling (${pPct}%)`;
-        } else {
-          pressureGauge = `⚪ Neutral Chop (${pPct >= 0 ? "+" : ""}${pPct}%)`;
-        }
-      }
-
-      const safeUsdcFmt = (Number(safeUsdcBalance) / 1e6).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-      const safeNaraFmt = (Number(safeNaraBalance) / 1e18).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-      const rangerMsg = [
-        "🏹 *NARA Treasury Range Ranger Status*",
-        "━━━━━━━━━━━━━━━━━━━━",
-        `• *Grid Status:* ${statusIcon}`,
-        `• *Spot Price:* \`$${spot.toFixed(4)} USDC\``,
-        `• *Pool Tick:* \`${state.currentTick}\``,
-        `• *Market Pressure:* ${pressureGauge}`,
-        `• *Volatility Multiplier:* ${marketFlow.volatilityScore.toFixed(2)}x`,
-        "━━━━━━━━━━━━━━━━━━━━",
-        "📊 *Liquidity Topology:*",
-        `• *Nearest Buy Floor:* ${nearestBuyText}`,
-        `• *Nearest Sell Wall:* ${nearestSellText}`,
-        `• *Active Orders:* ${analysis.activeBuyCount} Buy / ${analysis.activeSellCount} Sell (${analysis.staleOrders.length} stale)`,
-        "━━━━━━━━━━━━━━━━━━━━",
-        "🏦 *Treasury Safe Reserves:*",
-        `• *USDC Available:* \`$${safeUsdcFmt}\``,
-        `• *NARA Available:* \`${safeNaraFmt} NARA\``,
-        `• *Adaptive Sizing:* \`$${dynamicBudgets.usdcBudget} USDC / ${dynamicBudgets.naraBudget.toLocaleString()} NARA\``,
-        `• *Operational Guard:* ${isClean ? "🟢 Clean (`assertOperationalClean` OK)" : "🟡 In Transit"}`,
-        "━━━━━━━━━━━━━━━━━━━━",
-        "💡 *Available Ranger Commands:*",
-        "• `/rangerorders` — View active onchain limit orders",
-        "• `/recenter` — Preview 5-tier adaptive rebalance bracket",
-      ].join("\n");
-      return sendTg(fromChatId, rangerMsg);
-    } catch (err) {
-      return sendTg(fromChatId, "❌ Error reading Range Ranger state: " + err.message);
-    }
-  }
-
-  if (cmd === "/rangerorders" || cmd === "/orders" || cmd === "/rangeorders") {
-    try {
-      const state = await fetchRangeRangerState();
-      const { activeOrders, analysis } = state;
-
-      if (activeOrders.length === 0) {
-        return sendTg(fromChatId, "📋 *No active range limit orders found on-chain.*");
-      }
-
-      const buyOrders = [];
-      const sellOrders = [];
-
-      for (const order of activeOrders) {
-        const pUpper = tickToPriceUsdc(order.tickLower);
-        const pLower = tickToPriceUsdc(order.tickUpper);
-        const pMin = Math.min(pLower, pUpper);
-        const pMax = Math.max(pLower, pUpper);
-
-        // OrderSide: 0 = SellNara (input is NARA 18 decimals), 1 = BuyNara (input is USDC 6 decimals)
-        if (Number(order.side) === 1) {
-          const usdcIn = (Number(order.inputAmount) / 1e6).toFixed(2);
-          buyOrders.push({
-            pMax,
-            text: `• *#${order.orderId}:* \`$${pMin.toFixed(4)}–$${pMax.toFixed(4)}\` ($${usdcIn} USDC)`,
-          });
-        } else {
-          const naraIn = (Number(order.inputAmount) / 1e18).toLocaleString("en-US", { maximumFractionDigits: 0 });
-          sellOrders.push({
-            pMin,
-            text: `• *#${order.orderId}:* \`$${pMin.toFixed(4)}–$${pMax.toFixed(4)}\` (${naraIn} NARA)`,
-          });
-        }
-      }
-
-      // Sort buy orders descending (highest buy floor closest to spot first)
-      buyOrders.sort((a, b) => b.pMax - a.pMax);
-      // Sort sell orders ascending (lowest sell wall closest to spot first)
-      sellOrders.sort((a, b) => a.pMin - b.pMin);
-
-      const buyLines = buyOrders.map((o) => o.text);
-      const sellLines = sellOrders.map((o) => o.text);
-
-      const ordersMsg = [
-        "📋 *NARA Active Range Limit Orders*",
-        "━━━━━━━━━━━━━━━━━━━━",
-        `• *Spot Price:* \`$${analysis.spotPrice.toFixed(4)} USDC\``,
-        `• *Total Active:* ${activeOrders.length} orders (${analysis.staleOrders.length} stale)`,
-        "",
-        `🟢 *Active Buy Floor Orders (${buyLines.length}):*`,
-        buyLines.length > 0 ? buyLines.join("\n") : "  _None_",
-        "",
-        `🔴 *Active Sell Wall Orders (${sellLines.length}):*`,
-        sellLines.length > 0 ? sellLines.join("\n") : "  _None_",
-        "━━━━━━━━━━━━━━━━━━━━",
-        "💡 Use `/recenter` to preview a freshly balanced 5-tier adaptive bracket around spot.",
-      ].join("\n");
-      return sendTg(fromChatId, ordersMsg);
-    } catch (err) {
-      return sendTg(fromChatId, "❌ Error reading Range orders: " + err.message);
-    }
-  }
-
-  if (cmd === "/recenter" || cmd === "/ranger_recenter") {
-    try {
-      const state = await fetchRangeRangerState();
-      const { analysis, currentTick, marketFlow, dynamicBudgets } = state;
-      const spot = analysis.spotPrice;
-
-      const buyBands = synthesizeBuyBracket(spot, dynamicBudgets.usdcBudget, currentTick, {
-        netPressure: marketFlow.netPressure,
-        volatilityScore: marketFlow.volatilityScore,
-        tierCount: 5,
-      });
-      const sellBands = synthesizeSellBracket(spot, dynamicBudgets.naraBudget, currentTick, {
-        netPressure: marketFlow.netPressure,
-        volatilityScore: marketFlow.volatilityScore,
-        tierCount: 5,
-      });
-
-      const buyLines = buyBands.map((b) => `• *Tier ${b.bandIndex}:* \`${b.targetPriceRange}\` ($${b.usdcBudget} USDC)`);
-      const sellLines = sellBands.map((s) => `• *Tier ${s.bandIndex}:* \`${s.targetPriceRange}\` (${s.naraBudget.toLocaleString("en-US")} NARA)`);
-
-      let flowStatus = "⚪ Neutral Chop (Balanced Spreads)";
-      const pPct = (marketFlow.netPressure * 100).toFixed(0);
-      if (marketFlow.netPressure >= 0.25) {
-        flowStatus = `🟢 Net Buying (+${pPct}%) — Ratchet Floor Skew`;
-      } else if (marketFlow.netPressure <= -0.25) {
-        flowStatus = `🔴 Net Selling (${pPct}%) — Deep Value DCA Skew`;
-      }
-
-      const recenterMsg = [
-        "🎯 *Recommended 5-Tier Adaptive Recenter Bracket*",
-        "━━━━━━━━━━━━━━━━━━━━",
-        `• *Current Spot:* \`$${spot.toFixed(4)} USDC\``,
-        `• *Current Tick:* \`${currentTick}\``,
-        `• *Market Pressure:* ${flowStatus}`,
-        `• *Volatility Multiplier:* ${marketFlow.volatilityScore.toFixed(2)}x`,
-        `• *Stale Orders to Cancel:* ${analysis.staleOrders.length}`,
-        "━━━━━━━━━━━━━━━━━━━━",
-        `🟢 *5-Tier Buy Floor ($${dynamicBudgets.usdcBudget} USDC dynamic budget):*`,
-        ...buyLines,
-        "",
-        `🔴 *5-Tier Sell Wall (${dynamicBudgets.naraBudget.toLocaleString("en-US")} NARA dynamic budget):*`,
-        ...sellLines,
-        "━━━━━━━━━━━━━━━━━━━━",
-        "⚙️ *To execute rebalance:*",
-        "• Autonomous Railway runner auto-rebalances when gap exceeds 20%",
-        "• Or execute via workspace terminal: `RANGERECENTER`",
-      ].join("\n");
-      return sendTg(fromChatId, recenterMsg);
-    } catch (err) {
-      return sendTg(fromChatId, "❌ Error calculating recenter bracket: " + err.message);
-    }
+  if (retiredRangeRangerCommands.has(cmd)) {
+    return sendTg(fromChatId, rangeRangerRetiredMsg);
   }
 
   if (cmd === "/status") {
@@ -560,30 +429,57 @@ async function handleCommand(msg) {
 
   if (cmd === "/whales") {
     try {
-      const nextPosId = await client.readContract({
-        address: engineAddress,
-        abi: engineAbi,
-        functionName: "nextPositionId",
-      });
-      const count = Number(nextPosId);
+      const modules = await resolveV5Modules();
       const userTotals = new Map();
 
-      for (let i = 1; i < count; i++) {
-        try {
-          const pos = await client.readContract({
-            address: engineAddress,
-            abi: engineAbi,
-            functionName: "positionOf",
-            args: [BigInt(i)],
-          });
-          const amt = BigInt(pos.amount);
-          if (amt > 0n) {
-            const current = userTotals.get(pos.owner.toLowerCase()) || { owner: pos.owner, amount: 0n, count: 0 };
-            current.amount += amt;
-            current.count += 1;
-            userTotals.set(pos.owner.toLowerCase(), current);
-          }
-        } catch {}
+      if (modules.principal) {
+        const nextPosId = await client.readContract({
+          address: modules.principal,
+          abi: principalAbi,
+          functionName: "nextPositionId",
+        });
+        const count = Number(nextPosId);
+        for (let i = 1; i < count; i++) {
+          try {
+            const pos = await client.readContract({
+              address: modules.principal,
+              abi: principalAbi,
+              functionName: "positionHead",
+              args: [BigInt(i)],
+            });
+            const amt = BigInt(pos.principal);
+            if (!pos.withdrawn && amt > 0n) {
+              const current = userTotals.get(pos.generationOwner.toLowerCase()) || { owner: pos.generationOwner, amount: 0n, count: 0 };
+              current.amount += amt;
+              current.count += 1;
+              userTotals.set(pos.generationOwner.toLowerCase(), current);
+            }
+          } catch {}
+        }
+      } else {
+        const nextPosId = await client.readContract({
+          address: engineAddress,
+          abi: engineAbi,
+          functionName: "nextPositionId",
+        });
+        const count = Number(nextPosId);
+        for (let i = 1; i < count; i++) {
+          try {
+            const pos = await client.readContract({
+              address: engineAddress,
+              abi: engineAbi,
+              functionName: "positionOf",
+              args: [BigInt(i)],
+            });
+            const amt = BigInt(pos.amount);
+            if (amt > 0n) {
+              const current = userTotals.get(pos.owner.toLowerCase()) || { owner: pos.owner, amount: 0n, count: 0 };
+              current.amount += amt;
+              current.count += 1;
+              userTotals.set(pos.owner.toLowerCase(), current);
+            }
+          } catch {}
+        }
       }
 
       const sorted = Array.from(userTotals.values()).sort((a, b) => (b.amount > a.amount ? 1 : -1)).slice(0, 5);
@@ -631,8 +527,9 @@ async function handleCommand(msg) {
     try {
       const checksumTarget = getAddress(target);
       const lower = checksumTarget.toLowerCase();
+      const modules = await resolveV5Modules();
 
-      const [ethBal, naraBal, nftBalance, totalSupply, currentEpoch, nextPosId] = await Promise.all([
+      const [ethBal, naraBal, nftBalance, totalSupply, epochSnapshot, nextPosId] = await Promise.all([
         client.getBalance({ address: checksumTarget }),
         client.readContract({
           address: tokenAddress,
@@ -655,17 +552,20 @@ async function handleCommand(msg) {
           abi: tokenAbi,
           functionName: "totalSupply",
         }),
-        client.readContract({
-          address: engineAddress,
-          abi: engineAbi,
-          functionName: "currentEpoch",
-        }),
-        client.readContract({
-          address: engineAddress,
-          abi: engineAbi,
-          functionName: "nextPositionId",
-        }),
+        readEngineEpochSnapshot(),
+        modules.principal
+          ? client.readContract({
+              address: modules.principal,
+              abi: principalAbi,
+              functionName: "nextPositionId",
+            })
+          : client.readContract({
+              address: engineAddress,
+              abi: engineAbi,
+              functionName: "nextPositionId",
+            }),
       ]);
+      const currentEpoch = epochSnapshot.currentEpoch;
 
       const totalPositions = Number(nextPosId);
       const userLocks = [];
@@ -676,49 +576,105 @@ async function handleCommand(msg) {
 
       for (let i = 1; i < totalPositions; i++) {
         try {
-          const pos = await client.readContract({
-            address: engineAddress,
-            abi: engineAbi,
-            functionName: "positionOf",
-            args: [BigInt(i)],
-          });
-          if (pos.owner.toLowerCase() === lower) {
-            const amt = BigInt(pos.amount);
-            const wgt = BigInt(pos.weight);
-            const isActive = amt > 0n;
-
-            if (isActive) {
-              totalLockedBig += amt;
-              totalWeightBig += wgt;
-            }
-
-            let claimNara = 0n;
-            let claimEth = 0n;
-            if (isActive) {
-              try {
-                const [posNara, posEth] = await client.readContract({
-                  address: engineAddress,
-                  abi: engineAbi,
-                  functionName: "claimableRewards",
-                  args: [BigInt(i)],
-                });
-                claimNara = BigInt(posNara ?? 0);
-                claimEth = BigInt(posEth ?? 0);
-                totalClaimableNara += claimNara;
-                totalClaimableEth += claimEth;
-              } catch {}
-            }
-
-            userLocks.push({
-              id: i,
-              amount: amt,
-              weight: wgt,
-              activationEpoch: pos.activationEpoch,
-              unlockEpoch: pos.unlockEpoch,
-              claimNara,
-              claimEth,
-              isActive,
+          if (modules.principal) {
+            const pos = await client.readContract({
+              address: modules.principal,
+              abi: principalAbi,
+              functionName: "positionHead",
+              args: [BigInt(i)],
             });
+            if (pos.generationOwner.toLowerCase() === lower) {
+              const amt = BigInt(pos.principal);
+              const wgt = BigInt(pos.rewardWeight);
+              const isActive = !pos.withdrawn && amt > 0n;
+
+              if (isActive) {
+                totalLockedBig += amt;
+                totalWeightBig += wgt;
+              }
+
+              let claimNara = 0n;
+              let claimEth = 0n;
+              if (isActive && modules.rewards) {
+                try {
+                  const [naraCredit, ethCredit] = await Promise.all([
+                    client.readContract({
+                      address: modules.rewards,
+                      abi: rewardAbi,
+                      functionName: "claimCredit",
+                      args: [BigInt(i), BigInt(pos.generation), 0],
+                    }),
+                    client.readContract({
+                      address: modules.rewards,
+                      abi: rewardAbi,
+                      functionName: "claimCredit",
+                      args: [BigInt(i), BigInt(pos.generation), 1],
+                    }),
+                  ]);
+                  const ray = 10n ** 27n;
+                  claimNara = BigInt(naraCredit?.unpaidScaled ?? 0n) / ray;
+                  claimEth = BigInt(ethCredit?.unpaidScaled ?? 0n) / ray;
+                  totalClaimableNara += claimNara;
+                  totalClaimableEth += claimEth;
+                } catch {}
+              }
+
+              userLocks.push({
+                id: i,
+                amount: amt,
+                weight: wgt,
+                activationEpoch: pos.activation,
+                unlockEpoch: pos.effectiveEnd,
+                claimNara,
+                claimEth,
+                isActive,
+              });
+            }
+          } else {
+            const pos = await client.readContract({
+              address: engineAddress,
+              abi: engineAbi,
+              functionName: "positionOf",
+              args: [BigInt(i)],
+            });
+            if (pos.owner.toLowerCase() === lower) {
+              const amt = BigInt(pos.amount);
+              const wgt = BigInt(pos.weight);
+              const isActive = amt > 0n;
+
+              if (isActive) {
+                totalLockedBig += amt;
+                totalWeightBig += wgt;
+              }
+
+              let claimNara = 0n;
+              let claimEth = 0n;
+              if (isActive) {
+                try {
+                  const [posNara, posEth] = await client.readContract({
+                    address: engineAddress,
+                    abi: engineAbi,
+                    functionName: "claimableRewards",
+                    args: [BigInt(i)],
+                  });
+                  claimNara = BigInt(posNara ?? 0);
+                  claimEth = BigInt(posEth ?? 0);
+                  totalClaimableNara += claimNara;
+                  totalClaimableEth += claimEth;
+                } catch {}
+              }
+
+              userLocks.push({
+                id: i,
+                amount: amt,
+                weight: wgt,
+                activationEpoch: pos.activationEpoch,
+                unlockEpoch: pos.unlockEpoch,
+                claimNara,
+                claimEth,
+                isActive,
+              });
+            }
           }
         } catch {}
       }

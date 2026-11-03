@@ -362,11 +362,18 @@ export function classifyFailedFunction(contractName: string, functionName: strin
     return { functionGroup: "admin_function", riskCategory: "admin_revert", callPath: "direct_admin" };
   }
 
-  if (functionName === "lock" || functionName === "lockWithPermit" || functionName === "onTransferReceived") {
+  if (
+    functionName === "lock" ||
+    functionName === "lockWithPermit" ||
+    functionName === "onTransferReceived" ||
+    functionName === "create" ||
+    functionName === "rechargeCommon" ||
+    functionName === "rechargeAwarded"
+  ) {
     return { functionGroup: "engine_lock", riskCategory: "lock_revert", callPath: "lock" };
   }
 
-  if (functionName === "unlock" || isNameMatch(functionName, ["unlock", "burneternalgenesis"])) {
+  if (functionName === "unlock" || functionName === "withdrawPrincipal" || isNameMatch(functionName, ["unlock", "burneternalgenesis"])) {
     return { functionGroup: "engine_unlock", riskCategory: "unlock_revert", callPath: "unlock" };
   }
 
@@ -379,7 +386,7 @@ export function classifyFailedFunction(contractName: string, functionName: strin
     return { functionGroup: "extend", riskCategory: "user_revert", callPath: "user" };
   }
 
-  if (contractName === "NARAPositionNFTV4" && isNameMatch(functionName, ["mint", "wrap"])) {
+  if (contractName === "NARAPositionNFTV4" && isNameMatch(functionName, ["mint", "wrap", "materializedormant"])) {
     return { functionGroup: "nft_mint_or_wrap", riskCategory: "lock_revert", callPath: "lock" };
   }
 
@@ -411,7 +418,15 @@ function extractKnownArgs(functionName: string, functionGroup: FunctionGroup, ar
   let amount: bigint | null = null;
 
   if (functionGroup === "engine_lock") {
-    amount = bigintArg(args[0]);
+    const firstArg = args[0] as any;
+    if (functionName === "create") {
+      amount = bigintArg(firstArg?.amount ?? firstArg?.[0] ?? firstArg);
+    } else if (functionName === "rechargeCommon") {
+      positionId = bigintArg(firstArg?.positionId ?? firstArg?.[0]);
+      amount = bigintArg(firstArg?.funding?.amount ?? firstArg?.funding?.[0]);
+    } else {
+      amount = bigintArg(firstArg);
+    }
   }
 
   if (functionGroup === "engine_unlock" || functionGroup === "claim" || functionGroup === "extend") {

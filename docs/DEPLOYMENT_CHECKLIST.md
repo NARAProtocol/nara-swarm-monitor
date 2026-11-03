@@ -84,6 +84,8 @@ confuse deployment with consumer-integration authority.
 
 - [ ] No private keys are configured or required.
 - [ ] No signer is configured or required.
+- [ ] `TREASURY_PRIVATE_KEY` and every obsolete `RANGE_RANGER_*` variable are
+      absent; the treasury Range Ranger is retired.
 - [ ] No transactions are sent or required.
 - [ ] No transaction permissions are configured or required.
 - [ ] No protocol writes are possible from monitor runtime.

@@ -20,7 +20,7 @@ or every interface is available, production-ready, audited, safe, legally
 approved, or available in any jurisdiction.
 
 The active NARA token is
-`0xB6333F5D4cEd8dffA80F3F13697D6aA3BB3f19c1`. The historical `0x65E...`
+`0x91FB78A9F46B67f54BbD4489941d19666b2fAe0f`. The historical `0x65E...`
 token is retired evidence and must not be configured as current.
 
 The Position NFT Phase-2 baseline is deployed, tested under the recorded

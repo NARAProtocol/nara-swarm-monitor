@@ -66,6 +66,10 @@ It also requires `CHAIN_ID`, `BASE_RPC_URL`, `DATABASE_URL`,
 addresses when present, refuses `API_READ_ONLY=false`, and checks notification
 channel prerequisites without printing secret values.
 
+Because the treasury Range Ranger is retired, the validator also fails while
+`TREASURY_PRIVATE_KEY` is set or `RANGE_RANGER_AUTO_EXECUTE` is enabled.
+`npm run start` applies the same refusal before it launches any process.
+
 ### Step 3: Check Engine Epoch Health
 
 ```bash

@@ -152,6 +152,37 @@ address.
 `DEPLOYER_ADDRESS`
 : Optional deployer label for operator context.
 
+`V5_PRINCIPAL_LEDGER`
+: Optional V5 `NARAPrincipalLedgerV5` address. When set, Ponder indexes V5
+  position creation (`PositionCreated`) and withdrawal (`PrincipalWithdrawn`)
+  alongside `V4_ENGINE`, and the Telegram listener and failed-tx scanner read
+  it directly.
+
+`V5_REWARD_LEDGER`
+: Optional V5 `NARARewardLedgerV5` address. When set, Ponder indexes V5 reward
+  claims (`RewardClaimed`) alongside `V4_ENGINE`, and the Telegram listener and
+  failed-tx scanner read it directly.
+
+`V5_EMISSION_RESERVE`
+: Optional V5 `NARAEmissionReserveV5` address for protocol wallet labeling and
+  Telegram `/contracts` display.
+
+`V5_FORGE`
+: Optional V5 `NARAForgeV5` address for protocol wallet labeling and Telegram
+  `/contracts` display.
+
+`V5_POSITION_SALE`
+: Optional V5 `NARAPositionSaleV5` address for protocol wallet labeling and
+  Telegram `/contracts` display.
+
+`V5_POOL_ORACLE`
+: Optional V5 `NARAPoolOracleV5` address for protocol wallet labeling and
+  Telegram `/contracts` display.
+
+`V5_TREASURY_RANGE_MANAGER`
+: Optional V5 `NARATreasuryRangeManagerV5` address for protocol wallet labeling
+  and Telegram `/contracts` display.
+
 ## Liquidity
 
 `V4_DEX_TYPE`
@@ -279,6 +310,32 @@ drift gate verify that this commit is contained in the locally known
 : Full 40-character merged commit from
 `NARAProtocol/nara_protocol_v4_baskets`. The pinned ecosystem drift gate
 verifies that this commit is contained in the locally known `origin/main`.
+
+## Retired And Forbidden
+
+The treasury Range Ranger is permanently retired; see the FIELD workspace audit
+`audit-runs/2026-09-24-range-manager/REPORT.md`. The monitor never holds a
+signing key.
+
+`TREASURY_PRIVATE_KEY`
+: Forbidden. It must not be set in any environment: Railway, CI, or a
+  workstation `.env` or `.env.local`. `npm run start` refuses to start while it
+  is set, before any child process is launched, and `npm run validate:env`
+  fails while it is set in the environment, `.env` or `.env.local`. Ponder loads
+  `.env.local` by itself, so keep the key out of that file too.
+
+`RANGE_RANGER_*`
+: Obsolete. `RANGE_RANGER_ALERT_ENABLED`, `RANGE_RANGER_POLL_SECONDS`,
+  `RANGE_RANGER_TRANCHE_USDC`, `RANGE_RANGER_TRANCHE_NARA`,
+  `RANGE_RANGER_MIN_USDC`, `RANGE_RANGER_MAX_USDC`, `RANGE_RANGER_MIN_NARA`,
+  `RANGE_RANGER_MAX_NARA`, `RANGE_RANGER_MIN_GAP_PCT` and
+  `RANGE_RANGER_VOLATILITY_PCT` are ignored because the Range Ranger never
+  starts; delete them. `npm run start` and `npm run validate:env` refuse to run
+  while `RANGE_RANGER_AUTO_EXECUTE` is enabled.
+
+`npm run start` also withholds every variable whose name contains
+`PRIVATE_KEY`, `MNEMONIC` or `SEED` from the processes it launches, and logs
+the withheld names, never their values.
 
 ## Deprecated Or External
 

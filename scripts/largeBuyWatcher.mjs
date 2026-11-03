@@ -5,11 +5,13 @@ import { configuredRpcUrls, withRpcFailover } from "./rpcFailoverRuntime.mjs";
 import { postgresClientConfig } from "./sqlRuntime.mjs";
 import {
   POOL_FEE_TAKEN_EVENT,
+  REALIZED_FEE_EVENT,
   buildLargeBuyTelegramMessage,
   buildLargeBuyTestMessage,
   formatUsdc,
   isLargeCanonicalBuy,
   largeBuyDeliveryId,
+  normalizeHookSwapEvent,
   parseUsdcThreshold,
 } from "./largeBuyWatcherRuntime.mjs";
 
@@ -166,27 +168,43 @@ async function readChainRange(rpcUrl, cursor) {
   const toBlock = fromBlock + maxBlocksPerScan - 1n < confirmedHead
     ? fromBlock + maxBlocksPerScan - 1n
     : confirmedHead;
-  const logs = await client.getLogs({
-    address: hookAddress,
-    event: POOL_FEE_TAKEN_EVENT,
-    args: { poolId },
-    fromBlock,
-    toBlock,
-  });
+  const [v4Logs, v5Logs] = await Promise.all([
+    client.getLogs({
+      address: hookAddress,
+      event: POOL_FEE_TAKEN_EVENT,
+      args: { poolId },
+      fromBlock,
+      toBlock,
+    }),
+    client.getLogs({
+      address: hookAddress,
+      event: REALIZED_FEE_EVENT,
+      args: { currency: usdcAddress },
+      fromBlock,
+      toBlock,
+    }),
+  ]);
+  const logs = [...v4Logs, ...v5Logs].sort((a, b) =>
+    a.blockNumber === b.blockNumber
+      ? Number(a.logIndex) - Number(b.logIndex)
+      : a.blockNumber < b.blockNumber ? -1 : 1,
+  );
 
   const purchases = [];
   for (const log of logs) {
     if (!isLargeCanonicalBuy(log.args, { poolId, usdcAddress, minimumUsdcRaw })) continue;
+    const normalized = normalizeHookSwapEvent(log.args, { poolId, usdcAddress });
     const transaction = await client.getTransaction({ hash: log.transactionHash });
     purchases.push({
       transactionHash: log.transactionHash,
       logIndex: Number(log.logIndex),
       blockNumber: log.blockNumber,
       buyer: transaction.from,
-      hookSender: log.args.sender,
-      amountIn: log.args.amountIn,
-      feeAmount: log.args.feeAmount,
-      feeBps: log.args.feeBps,
+      hookSender: normalized.sender || transaction.to || hookAddress,
+      amountIn: normalized.amountIn,
+      feeAmount: normalized.feeAmount,
+      feeBps: normalized.feeBps,
+      naraOut: normalized.naraOut,
     });
   }
 

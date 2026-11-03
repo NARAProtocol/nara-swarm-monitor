@@ -14,11 +14,16 @@ const RETIRED_ADDRESSES = new Set(
     "0x255770CA9D2b69ef766cF2755276051a6D21D131", // v3 lock account
     "0x7FDbA2DB4C46d69216f2166aA7f2CED403d97885", // v3 lock renderer
 
-    // Retired v4 incident stack. Historical/recovery only, never monitor default.
+    // Retired v4 incident & historical token/key/Safe stack. Historical/recovery only, never monitor default.
+    "0xB6333F5D4cEd8dffA80F3F13697D6aA3BB3f19c1", // historical NARA token
+    "0x65E247AA3aa9C0131b2984b894c3D24c41341D7A", // historical NARA token
     "0x58c209B95350aFBEFa17137CEd209f8c4b7D896D", // incident NARAToken v4
     "0x9E8cE51805b13a4d75c324F75B06ABc00d9b1E03", // incident NARAEngine v4
     "0x58C3f6E6b005009B775C0912B003D39660D14391", // incident liquidity vault
     "0x86ED92166aF1f97Fba75A9b12D9b1F7FfEE5E088", // incident liquidity hook
+    "0x5050BC6dc3E07313D52D05cecD53f727D6CDa245", // retired Range Safe
+    "0x5f3A378B685E309AE7404a7483420e49F2FBE6Aa", // retired ex-owner key
+    "0xfe3A8678A9c729438BB11718bD1391E7Ab491E8e", // retired Range Ranger key
   ].map((address) => address.toLowerCase()),
 );
 

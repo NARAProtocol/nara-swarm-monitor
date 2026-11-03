@@ -84,7 +84,31 @@ expectFail(runValidation({ V4_MAX_EPOCH_BACKLOG: "5", V4_EPOCH_CRITICAL_BACKLOG:
 expectFail(runValidation({ V4_EPOCH_CRITICAL_BACKLOG: "9" }), /between 2 and 8/, "late critical epoch threshold fails");
 expectFail(runValidation({ EPOCH_SENTINEL_INTERVAL_SECONDS: "59" }), /at least 60/, "too-fast epoch polling fails");
 expectFail(runValidation({ V4_NARA_TOKEN: "0xE444de61752bD13D1D37Ee59c31ef4e489bd727C" }), /retired NARA address/, "retired v3 address fails");
+expectFail(runValidation({ V4_NARA_TOKEN: "0xB6333F5D4cEd8dffA80F3F13697D6aA3BB3f19c1" }), /retired NARA address/, "retired historical token fails");
+expectFail(runValidation({ V4_TREASURY_ADDRESS: "0x5050BC6dc3E07313D52D05cecD53f727D6CDa245" }), /retired NARA address/, "retired Range Safe fails");
+expectFail(runValidation({ V4_TREASURY_ADDRESS: "0xfe3A8678A9c729438BB11718bD1391E7Ab491E8e" }), /retired NARA address/, "retired Range Ranger key fails");
+expectPass(
+  runValidation({
+    V5_PRINCIPAL_LEDGER: "0x7F866a9fbe41D54F0d9C35b6892fcf27Ea766DB2",
+    V5_REWARD_LEDGER: "0xC72671D9438388638547444524F6542b650C9264",
+    V5_EMISSION_RESERVE: "0xf932178F24b0813C82093985F0Af6Db27Ae25930",
+    V5_FORGE: "0x84225aBaBbE7433c736925f9c0ba6f6CcB51551a",
+    V5_POSITION_SALE: "0x04Ac83045d26259D46400Ce6beb9bBd0641df225",
+    V5_POOL_ORACLE: "0xA2151333BDD77DF2E058f9cE274F63D2e48A5553",
+    V5_TREASURY_RANGE_MANAGER: "0xa72557fcBE56B3eC739dF3aF7b6b893B6Db4D288",
+  }),
+  "optional V5 module addresses pass validation",
+);
 expectFail(runValidation({ API_READ_ONLY: "false" }), /API_READ_ONLY/, "write-enabled API flag fails");
+{
+  const keySentinel = "treasury-key-sentinel-should-not-print";
+  const result = runValidation({ TREASURY_PRIVATE_KEY: keySentinel });
+  expectFail(result, /Remove TREASURY_PRIVATE_KEY/, "a configured treasury signing key fails closed");
+  assert.doesNotMatch(result.stdout + result.stderr, new RegExp(keySentinel), "the refused key value is never printed");
+}
+expectFail(runValidation({ RANGE_RANGER_AUTO_EXECUTE: "true" }), /Remove RANGE_RANGER_AUTO_EXECUTE/, "retired Range Ranger auto-execution fails closed");
+expectFail(runValidation({ RANGE_RANGER_AUTO_EXECUTE: "1" }), /RANGE_RANGER_AUTO_EXECUTE/, "numeric auto-execution flag fails closed");
+expectPass(runValidation({ RANGE_RANGER_AUTO_EXECUTE: "false" }), "an explicitly disabled auto-execution flag is inert");
 expectFail(runValidation({ NOTIFY_CHANNELS: "webhook", WEBHOOK_URL: "" }), /WEBHOOK_URL/, "webhook channel requires webhook URL");
 expectFail(runValidation({ NOTIFY_CHANNELS: "telegram", TELEGRAM_BOT_TOKEN: "", TELEGRAM_CHAT_ID: "" }), /TELEGRAM_BOT_TOKEN|TELEGRAM_CHAT_ID/, "telegram channel requires token and chat");
 expectFail(

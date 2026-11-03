@@ -60,7 +60,7 @@ assert.match(telegramSource, /safeGetAddress\(process\.env\.V4_POSITION_NFT\)/, 
 assert.match(telegramSource, /Unavailable \(core integration gated\)/, "Unset Position NFT telemetry is reported as integration gated, not zero");
 assert.match(telegramSource, /Unavailable \(configured read failed\)/, "Failed configured Position NFT reads are reported as unavailable, not zero");
 assert.doesNotMatch(railwayGuide, /V4_POSITION_NFT=0x[0-9a-fA-F]{40}/, "Railway core profile does not publish an unverified NFT address");
-assert.match(railwayGuide, /V4_START_BLOCK=49718979/, "Railway guide uses the verified fresh-v4 scan start");
+assert.match(railwayGuide, /V4_START_BLOCK=53410681/, "Railway guide uses the verified fresh-v4/v5 scan start");
 assert.match(railwayGuide, /LARGE_BUY_ALERT_ENABLED=false/, "Railway guide keeps optional buy alerts disabled by default");
 assert.doesNotMatch(
   telegramSource,
@@ -80,6 +80,45 @@ assert.match(startAllSource, /scheduleRestart\("Ponder"/, "Ponder is supervised 
 assert.match(startAllSource, /scheduleRestart\("Telegram bot"/, "Telegram is supervised without stopping the sentinel");
 assert.match(startAllSource, /checkEpochHealth\.mjs", "--sentinel"/, "production starts the independent epoch sentinel");
 assert.match(startAllSource, /EPOCH_SENTINEL_INTERVAL_SECONDS/, "epoch sentinel cadence is configurable");
+assert.doesNotMatch(startAllSource, /rangeRangerWatcher/, "production start never launches the retired Range Ranger");
+assert.match(startAllSource, /Range Ranger is retired/, "production start logs that the Range Ranger is retired");
+assert.doesNotMatch(startAllSource, /\.\.\.process\.env/, "child environments are never a raw copy of the parent environment");
+assert.doesNotMatch(startAllSource, /env: process\.env\b/, "no child inherits the unfiltered parent environment");
+assert.doesNotMatch(telegramSource, /rangeRangerRuntime/, "Telegram listener does not load the retired Range Ranger runtime");
+assert.doesNotMatch(telegramSource, /synthesize\w*Bracket/, "Telegram listener never builds ladder previews");
+assert.match(telegramSource, /"\/recenter"/, "the recenter command is still recognised");
+assert.match(telegramSource, /Range Ranger retired/, "Range Ranger commands reply that the ranger is retired");
+
+// Production start fails closed before spawning anything, the validator included, while the retired
+// Range Ranger's key or auto-execution switch is configured. CHAIN_ID is deliberately invalid so that
+// even a regressed guard cannot start long-running services from this test.
+function runStartAll(overrides) {
+  return spawnSync(process.execPath, ["scripts/startAll.mjs"], {
+    encoding: "utf8",
+    timeout: 30_000,
+    env: { ...process.env, CHAIN_ID: "not-a-chain-id", ...overrides },
+  });
+}
+{
+  const keySentinel = "start-all-key-sentinel-should-not-print";
+  const refused = runStartAll({ TREASURY_PRIVATE_KEY: keySentinel });
+  assert.equal(refused.status, 1, "production start refuses a configured treasury signing key");
+  assert.match(refused.stderr, /Remove TREASURY_PRIVATE_KEY/);
+  assert.doesNotMatch(refused.stdout + refused.stderr, /Fresh v4 env validation/, "the refusal happens before the validator is spawned");
+  assert.doesNotMatch(refused.stdout + refused.stderr, new RegExp(keySentinel), "the refused key value is never printed");
+
+  const autoExecute = runStartAll({ RANGE_RANGER_AUTO_EXECUTE: "true" });
+  assert.equal(autoExecute.status, 1, "production start refuses Range Ranger auto-execution");
+  assert.match(autoExecute.stderr, /Remove RANGE_RANGER_AUTO_EXECUTE/);
+
+  const secretSentinel = "withheld-secret-sentinel-should-not-print";
+  const withheld = runStartAll({ DEPLOYER_PRIVATE_KEY: secretSentinel, OPERATOR_MNEMONIC: secretSentinel });
+  assert.notEqual(withheld.status, 0, "the deliberately invalid test environment still fails validation");
+  assert.match(withheld.stderr, /Withholding .*DEPLOYER_PRIVATE_KEY/, "signing-secret variables are withheld from child processes");
+  assert.match(withheld.stderr, /Withholding .*OPERATOR_MNEMONIC/, "mnemonic variables are withheld from child processes");
+  assert.match(withheld.stderr, /Fresh v4 env validation failed/, "validation, not a service, is the first child");
+  assert.doesNotMatch(withheld.stdout + withheld.stderr, new RegExp(secretSentinel), "withheld values are never printed");
+}
 
 const cycleDryRun = spawnSync(process.execPath, ["scripts/monitorCycle.mjs", "--dry-run"], {
   encoding: "utf8",

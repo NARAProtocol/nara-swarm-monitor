@@ -25,9 +25,28 @@ if (!isAddress(engineAddress)) throw new Error("V4_ENGINE must be a valid addres
 const configuredChainId = Number(process.env.CHAIN_ID || "8453");
 if (configuredChainId !== base.id) throw new Error(`epoch health supports Base chain ID ${base.id}`);
 
-// Temporary minimal read fragment from the generated active-v4 NARAEngine ABI.
-// The full generated ABI remains the release authority at abis/NARAEngineAbi.ts.
+// Supports both V5 NARAEpochEngineV5.clock() and v4 NARAEngine.currentEpoch()/epochState().
 const epochReadAbi = [
+  {
+    type: "function",
+    name: "clock",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [
+      {
+        name: "c",
+        type: "tuple",
+        components: [
+          { name: "started", type: "bool" },
+          { name: "genesisTimestamp", type: "uint64" },
+          { name: "wallEpoch", type: "uint64" },
+          { name: "nextEpochToClose", type: "uint64" },
+          { name: "backlog", type: "uint64" },
+          { name: "nextBoundaryTimestamp", type: "uint256" },
+        ],
+      },
+    ],
+  },
   { type: "function", name: "currentEpoch", stateMutability: "view", inputs: [], outputs: [{ type: "uint64" }] },
   { type: "function", name: "epochState", stateMutability: "view", inputs: [], outputs: [{ name: "epoch", type: "uint64" }] },
 ];
@@ -41,11 +60,19 @@ const { value: observation, providerIndex } = await withRpcFailover(
     if (chainId !== configuredChainId) {
       throw new Error(`RPC chain ID ${chainId} does not match CHAIN_ID ${configuredChainId}`);
     }
-    const [currentEpoch, settledEpoch, block] = await Promise.all([
-      client.readContract({ address: engineAddress, abi: epochReadAbi, functionName: "currentEpoch", blockNumber }),
-      client.readContract({ address: engineAddress, abi: epochReadAbi, functionName: "epochState", blockNumber }),
-      client.getBlock({ blockNumber }),
-    ]);
+    const block = await client.getBlock({ blockNumber });
+    let currentEpoch;
+    let settledEpoch;
+    try {
+      const clock = await client.readContract({ address: engineAddress, abi: epochReadAbi, functionName: "clock", blockNumber });
+      currentEpoch = BigInt(clock.wallEpoch);
+      settledEpoch = BigInt(clock.nextEpochToClose);
+    } catch {
+      [currentEpoch, settledEpoch] = await Promise.all([
+        client.readContract({ address: engineAddress, abi: epochReadAbi, functionName: "currentEpoch", blockNumber }),
+        client.readContract({ address: engineAddress, abi: epochReadAbi, functionName: "epochState", blockNumber }),
+      ]);
+    }
     return { block, blockNumber, chainId, currentEpoch, settledEpoch };
   },
 );

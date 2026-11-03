@@ -83,6 +83,31 @@ function failedRecord(index, to, input, from = wallet, timestampOffset = 0) {
 }
 
 {
+  const v5CreateInput = calldata("NARAEngine", "create", [{
+    amount: 250n,
+    duration: 96,
+    expectedPolicyHash: `0x${"33".repeat(32)}`,
+    deadline: 1_800_000_000n,
+  }]);
+  const createRecord = failedRecord(101, engine, v5CreateInput);
+  assert.equal(createRecord.functionName, "create", "V5 create selector decoded");
+  assert.equal(createRecord.riskCategory, "lock_revert", "failed V5 create classified as lock_revert");
+  assert.equal(createRecord.amount, 250n, "failed V5 create amount decoded from tuple");
+
+  const v5WithdrawInput = calldata("NARAEngine", "withdrawPrincipal", [11n, 1n, recipient]);
+  const withdrawRecord = failedRecord(102, engine, v5WithdrawInput);
+  assert.equal(withdrawRecord.functionName, "withdrawPrincipal", "V5 withdrawPrincipal selector decoded");
+  assert.equal(withdrawRecord.riskCategory, "unlock_revert", "failed V5 withdrawPrincipal classified as unlock_revert");
+  assert.equal(withdrawRecord.positionId, 11n, "failed V5 withdrawPrincipal positionId decoded");
+
+  const v5ClaimInput = calldata("NARAEngine", "claim", [15n, 2n, 0, recipient]);
+  const claimRecord = failedRecord(103, engine, v5ClaimInput);
+  assert.equal(claimRecord.functionName, "claim", "V5 claim selector decoded");
+  assert.equal(claimRecord.riskCategory, "claim_revert", "failed V5 claim classified as claim_revert");
+  assert.equal(claimRecord.positionId, 15n, "failed V5 claim positionId decoded");
+}
+
+{
   const record = failedRecord(2, engine, calldata("NARAEngine", "claimRewards", [7n, recipient]));
   assert.equal(record.riskCategory, "claim_revert", "failed claim tx stored");
   assert.equal(record.positionId, 7n, "failed claim positionId is decoded");

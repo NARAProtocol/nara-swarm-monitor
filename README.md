@@ -184,6 +184,10 @@ access to the repository settings.
 - Protocol addresses are environment-only and validated at startup.
 - Retired deployment addresses are explicitly blocked.
 - Private keys are neither requested nor supported.
+- The treasury Range Ranger is retired and never starts. `TREASURY_PRIVATE_KEY`
+  must not be set in any environment, `RANGE_RANGER_*` variables are obsolete,
+  and startup refuses to run while `TREASURY_PRIVATE_KEY` is set or
+  `RANGE_RANGER_AUTO_EXECUTE` is enabled.
 - API endpoints are read-only and enforce bounded result limits.
 - AI summaries explain deterministic evidence; they do not control protocol
   state or independently determine alert severity.

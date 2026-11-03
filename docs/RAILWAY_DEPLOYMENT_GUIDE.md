@@ -44,22 +44,31 @@ BASE_RPC_URL=https://base-mainnet.g.alchemy.com/v2/YOUR_KEY
 DATABASE_SCHEMA=nara_v4_monitor
 COMMANDER_SQL_URL=http://127.0.0.1:8080/sql
 API_PORT=8080
-V4_START_BLOCK=49718979
+V4_START_BLOCK=53410681
 V4_EPOCH_LENGTH_SECONDS=900
 V4_MAX_EPOCH_BACKLOG=1
 V4_EPOCH_CRITICAL_BACKLOG=5
 EPOCH_SENTINEL_INTERVAL_SECONDS=300
 EPOCH_ALERT_REPEAT_SECONDS=1800
 FAILED_TX_SCAN_MAX_BLOCKS=512
-V4_NARA_TOKEN=0xB6333F5D4cEd8dffA80F3F13697D6aA3BB3f19c1
-V4_ENGINE=0x98ab6406D6B548F37dEF7110961bb45A399e5aFC
-V4_LIQUIDITY_GROWTH_HOOK=0x59AEf9799DEA01A7FB7dA73BEA10dfB08858A088
-V4_LIQUIDITY_GROWTH_VAULT=0xD7f7b44BF65EBa3E90fDe0642687ed22A323084D
-V4_LIQUIDITY_COMPOUNDER=0xfeFcc45C0454D022586eaA8a5c51BD25DCe713DF
-V4_UNISWAP_V4_POOL_ID=0x83edced1f39e6adf7469cd718eeb409824d948959263408d4cfb6e745c8db464
-V4_TREASURY_ADDRESS=0xfe3A8678A9c729438BB11718bD1391E7Ab491E8e
-V4_FINAL_ADMIN=0xd65c0e390Dc187A22c52c03816591CC736C0D755
-DEPLOYER_ADDRESS=0xAE9D1667B45558232BeD9d45DcCA53940F892aB5
+V4_NARA_TOKEN=0x91FB78A9F46B67f54BbD4489941d19666b2fAe0f
+V4_ENGINE=0xd93FbEbFb33FAc9288125074625D4750573B1a53
+V4_LIQUIDITY_GROWTH_HOOK=0x201fBD2839bEc513040024b37dAe97B401E96acC
+V4_LIQUIDITY_GROWTH_VAULT=0xe63b4BaAF873FC57859bfe13e0e8cFccAaB6AddE
+V4_LIQUIDITY_COMPOUNDER=0x01EF9de9f4e9197F2A3944b5B34A90eA2f558b64
+V4_UNISWAP_V4_POOL_ID=0x3bd8b60dc9eb37f00afa57585232e4018ae661b2dbd5318562183a67a07ac758
+V4_TREASURY_ADDRESS=0xe320C281c86079eA85f2Bc67864E873A61D551E3
+V4_FINAL_ADMIN=0xe320C281c86079eA85f2Bc67864E873A61D551E3
+DEPLOYER_ADDRESS=0x82fd7b79D4cfd8Fc5B4B9eE57CfD2E2592cE7805
+
+# V5 Modular Stack Extensions
+V5_PRINCIPAL_LEDGER=0x7F866a9fbe41D54F0d9C35b6892fcf27Ea766DB2
+V5_REWARD_LEDGER=0xC72671D9438388638547444524F6542b650C9264
+V5_EMISSION_RESERVE=0xf932178F24b0813C82093985F0Af6Db27Ae25930
+V5_FORGE=0x84225aBaBbE7433c736925f9c0ba6f6CcB51551a
+V5_POSITION_SALE=0x04Ac83045d26259D46400Ce6beb9bBd0641df225
+V5_POOL_ORACLE=0xA2151333BDD77DF2E058f9cE274F63D2e48A5553
+V5_TREASURY_RANGE_MANAGER=0xa72557fcBE56B3eC739dF3aF7b6b893B6Db4D288
 
 # Notifications & Telegram Bot Console
 NOTIFY_CHANNELS=telegram,console
@@ -77,6 +86,12 @@ MONITOR_CYCLE_INTERVAL_SECONDS=600
 ```
 
 *(Note: Replace `BASE_RPC_URL`, `TELEGRAM_BOT_TOKEN`, and `TELEGRAM_CHAT_ID` with your own credentials). Keep `DATABASE_SCHEMA` dedicated to this monitor; do not reuse a schema owned by another Ponder app.*
+
+**The treasury Range Ranger is retired.** Do not set `TREASURY_PRIVATE_KEY` in
+any environment, and delete every obsolete `RANGE_RANGER_*` variable from the
+service. `npm run start` refuses to start while `TREASURY_PRIVATE_KEY` is set or
+`RANGE_RANGER_AUTO_EXECUTE` is enabled, so remove them from the Railway
+variables before deploying this version. See `docs/ENVIRONMENT_VARIABLES.md`.
 
 The large-buy watcher reads only the canonical Hook's `PoolFeeTaken` event. It
 requires the verified pool ID and USDC address, persists a block cursor and
@@ -117,7 +132,8 @@ downstream handoff explicitly enable that surface.
 ### 🔍 How to Verify It's Running
 1. Click the **"Deployments"** tab on Railway and open **"View Logs"**.
 2. You will see:
-   * **Ponder Indexer:** Syncing events and live blocks on Base from block `49718979`.
+   * **Ponder Indexer:** Syncing events and live blocks on Base from block `53410681`.
    * **Telegram Console:** `🤖 Telegram bot command listener started with Menu registered...`
    * **Epoch Sentinel:** Reading Base independently every 5 minutes (`300s`), warning at backlog 2 and paging at backlog 5.
    * **Autonomous Swarm Scheduler:** Running the broader 5-step diagnostic cycle every 10 minutes (`600s`).
+   * **Range Ranger:** `🏹 Range Ranger is retired and is not started`. No Range Ranger process runs.

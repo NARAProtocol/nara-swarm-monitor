@@ -8,7 +8,7 @@ export const SCALE_DECIMALS_DIFF = 10n ** 12n; // 18 - 6
 export const RANGE_MANAGER_ADDRESS = "0xd58afa5eaB20B0ED287851Cf98f359AdEd58a69C";
 export const TREASURY_SAFE_ADDRESS = "0x5050BC6dc3E07313D52D05cecD53f727D6CDa245";
 export const USDC_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
-export const NARA_ADDRESS = "0xB6333F5D4cEd8dffA80F3F13697D6aA3BB3f19c1";
+export const NARA_ADDRESS = "0x91FB78A9F46B67f54BbD4489941d19666b2fAe0f";
 export const HOOK_ADDRESS = "0x59AEf9799DEA01A7FB7dA73BEA10dfB08858A088";
 
 export const POOL_FEE_TAKEN_EVENT = parseAbiItem(
@@ -642,97 +642,14 @@ export function buildRangeRangerTelegramAlert({
   ].join("\n");
 }
 
-export async function executeAutonomousSafeBatch({
-  publicClient,
-  walletClient,
-  safeAddress = TREASURY_SAFE_ADDRESS,
-  transactions,
-}) {
-  const MULTISEND_CALL_ONLY = "0x40A2aCCbd92BCA938b02010E17A5b8929b49130D";
-
-  let packed = "0x";
-  for (const tx of transactions) {
-    const op = "00";
-    const to = tx.to.toLowerCase().replace("0x", "");
-    const val = BigInt(tx.value || 0).toString(16).padStart(64, "0");
-    const dataBytes = tx.data.replace("0x", "");
-    const dataLen = (dataBytes.length / 2).toString(16).padStart(64, "0");
-    packed += op + to + val + dataLen + dataBytes;
-  }
-
-  const multiSendData = encodeFunctionData({
-    abi: parseAbi(["function multiSend(bytes transactions)"]),
-    functionName: "multiSend",
-    args: [packed],
-  });
-
-  const nonce = await publicClient.readContract({
-    address: safeAddress,
-    abi: parseAbi(["function nonce() view returns (uint256)"]),
-    functionName: "nonce",
-  });
-
-  const domain = { chainId: 8453, verifyingContract: safeAddress };
-  const types = {
-    SafeTx: [
-      { name: "to", type: "address" },
-      { name: "value", type: "uint256" },
-      { name: "data", type: "bytes" },
-      { name: "operation", type: "uint8" },
-      { name: "safeTxGas", type: "uint256" },
-      { name: "baseGas", type: "uint256" },
-      { name: "gasPrice", type: "uint256" },
-      { name: "gasToken", type: "address" },
-      { name: "refundReceiver", type: "address" },
-      { name: "nonce", type: "uint256" },
-    ],
-  };
-  const message = {
-    to: MULTISEND_CALL_ONLY,
-    value: 0n,
-    data: multiSendData,
-    operation: 1, // DelegateCall
-    safeTxGas: 0n,
-    baseGas: 0n,
-    gasPrice: 0n,
-    gasToken: "0x0000000000000000000000000000000000000000",
-    refundReceiver: "0x0000000000000000000000000000000000000000",
-    nonce: nonce,
-  };
-
-  const signature = await walletClient.signTypedData({
-    account: walletClient.account,
-    domain,
-    types,
-    primaryType: "SafeTx",
-    message,
-  });
-
-  const SAFE_EXEC_ABI = parseAbi([
-    "function execTransaction(address to, uint256 value, bytes data, uint8 operation, uint256 safeTxGas, uint256 baseGas, uint256 gasPrice, address gasToken, address refundReceiver, bytes signatures) payable returns (bool)",
-  ]);
-
-  const hash = await walletClient.writeContract({
-    address: safeAddress,
-    abi: SAFE_EXEC_ABI,
-    functionName: "execTransaction",
-    args: [
-      message.to,
-      message.value,
-      message.data,
-      message.operation,
-      message.safeTxGas,
-      message.baseGas,
-      message.gasPrice,
-      message.gasToken,
-      message.refundReceiver,
-      signature,
-    ],
-    gas: 7_500_000n,
-  });
-
-  const receipt = await publicClient.waitForTransactionReceipt({ hash });
-  return { hash, receipt, nonce };
+// Retired. The Range Ranger may never sign or execute a Safe transaction again
+// (audit-runs/2026-09-24-range-manager/REPORT.md, OFF-001, OFF-002 and OFF-008). The MultiSend
+// signing and execTransaction path was removed; this stub throws synchronously, before touching
+// any client, key or network. The pure math and synthesis helpers above remain for tests only.
+export function executeAutonomousSafeBatch() {
+  throw new Error(
+    "Range Ranger retired: autonomous Safe execution is permanently disabled. See audit-runs/2026-09-24-range-manager/REPORT.md.",
+  );
 }
 
 export function buildAutonomousSuccessTelegramAlert({

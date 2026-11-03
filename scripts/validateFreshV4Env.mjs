@@ -17,11 +17,16 @@ const retiredAddresses = new Set(
     "0x255770CA9D2b69ef766cF2755276051a6D21D131",
     "0x7FDbA2DB4C46d69216f2166aA7f2CED403d97885",
 
-    // Retired v4 incident stack.
+    // Retired v4 incident & historical token/key/Safe stack.
+    "0xB6333F5D4cEd8dffA80F3F13697D6aA3BB3f19c1",
+    "0x65E247AA3aa9C0131b2984b894c3D24c41341D7A",
     "0x58c209B95350aFBEFa17137CEd209f8c4b7D896D",
     "0x9E8cE51805b13a4d75c324F75B06ABc00d9b1E03",
     "0x58C3f6E6b005009B775C0912B003D39660D14391",
     "0x86ED92166aF1f97Fba75A9b12D9b1F7FfEE5E088",
+    "0x5050BC6dc3E07313D52D05cecD53f727D6CDa245",
+    "0x5f3A378B685E309AE7404a7483420e49F2FBE6Aa",
+    "0xfe3A8678A9c729438BB11718bD1391E7Ab491E8e",
   ].map((address) => address.toLowerCase()),
 );
 
@@ -55,6 +60,13 @@ const optionalAddresses = [
   "DEPLOYER_ADDRESS",
   "V4_LIQUIDITY_HOOK",
   "V4_LIQUIDITY_VAULT",
+  "V5_PRINCIPAL_LEDGER",
+  "V5_REWARD_LEDGER",
+  "V5_EMISSION_RESERVE",
+  "V5_FORGE",
+  "V5_POSITION_SALE",
+  "V5_POOL_ORACLE",
+  "V5_TREASURY_RANGE_MANAGER",
 ];
 
 const supportedNotificationChannels = new Set(["console", "webhook", "telegram", "discord", "email"]);
@@ -287,6 +299,17 @@ if (monitorProfile !== "core" && monitorProfile !== "full") {
 
 if (valueOf("API_READ_ONLY").toLowerCase() === "false") {
   fail("API_READ_ONLY cannot be false for the read-only monitor.");
+}
+
+// The treasury Range Ranger is permanently retired (audit-runs/2026-09-24-range-manager/REPORT.md).
+// No Safe owner key may be present in any monitor environment, and autonomous execution may not be
+// requested. Only the variable name is reported, never its value.
+if (env.TREASURY_PRIVATE_KEY !== undefined) {
+  fail("TREASURY_PRIVATE_KEY is set. Remove TREASURY_PRIVATE_KEY from every environment; the Range Ranger is retired and the monitor never holds a signing key.");
+}
+const rangeRangerAutoExecute = valueOf("RANGE_RANGER_AUTO_EXECUTE").toLowerCase();
+if (rangeRangerAutoExecute && !["false", "0", "no", "off"].includes(rangeRangerAutoExecute)) {
+  fail("RANGE_RANGER_AUTO_EXECUTE is enabled. Remove RANGE_RANGER_AUTO_EXECUTE; the Range Ranger is retired and autonomous treasury execution is permanently disabled.");
 }
 
 for (const name of monitorProfile === "core" ? coreRequiredAddresses : fullRequiredAddresses) {

@@ -22,6 +22,13 @@ import {
   buildAutonomousSuccessTelegramAlert,
 } from "./rangeRangerRuntime.mjs";
 
+// The Range Ranger is permanently retired: it re-priced treasury range orders around the
+// instantaneous pool price and signed Safe transactions with a hot owner key
+// (audit-runs/2026-09-24-range-manager/REPORT.md, OFF-001, OFF-002, OFF-003 and OFF-008).
+// Exit before any key is read or any loop starts, whatever flags or environment are supplied.
+console.log("Range Ranger is retired and will not run. See audit-runs/2026-09-24-range-manager/REPORT.md.");
+process.exit(0);
+
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const enabled = ["true", "1"].includes(String(process.env.RANGE_RANGER_ALERT_ENABLED || "false").toLowerCase());

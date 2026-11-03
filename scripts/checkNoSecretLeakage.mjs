@@ -97,6 +97,10 @@ function assertTrackedFilesSafe() {
   ];
 
   for (const file of files) {
+    const stat = statSync(file, { throwIfNoEntry: false });
+    if (!stat || !stat.isFile()) {
+      continue;
+    }
     const normalized = file.replaceAll("\\", "/");
     const lower = normalized.toLowerCase();
     const isEnvFile =
