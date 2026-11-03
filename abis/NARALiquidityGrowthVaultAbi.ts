@@ -1510,5 +1510,66 @@ export const NARALiquidityGrowthVaultAbi = [
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true, "internalType": "uint8", "name": "asset", "type": "uint8" },
+      { "indexed": true, "internalType": "bool", "name": "lpFee", "type": "bool" },
+      { "indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256" },
+      { "indexed": false, "internalType": "uint256", "name": "holders", "type": "uint256" },
+      { "indexed": false, "internalType": "uint256", "name": "pol", "type": "uint256" }
+    ],
+    "name": "FeeRecorded",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true, "internalType": "uint8", "name": "asset", "type": "uint8" },
+      { "indexed": false, "internalType": "uint256", "name": "holders", "type": "uint256" },
+      { "indexed": false, "internalType": "uint256", "name": "pol", "type": "uint256" }
+    ],
+    "name": "ClaimsRedeemed",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true, "internalType": "uint8", "name": "asset", "type": "uint8" },
+      { "indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256" }
+    ],
+    "name": "HoldersForwarded",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true, "internalType": "uint8", "name": "asset", "type": "uint8" },
+      { "indexed": true, "internalType": "address", "name": "payer", "type": "address" },
+      { "indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256" },
+      { "indexed": false, "internalType": "bool", "name": "returnedCapital", "type": "bool" }
+    ],
+    "name": "POLFunded",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true, "internalType": "uint8", "name": "asset", "type": "uint8" },
+      { "indexed": true, "internalType": "address", "name": "controller", "type": "address" },
+      { "indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256" }
+    ],
+    "name": "POLSpent",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": false, "internalType": "bool", "name": "paused", "type": "bool" },
+      { "indexed": true, "internalType": "bytes32", "name": "evidence", "type": "bytes32" }
+    ],
+    "name": "POLPauseChanged",
+    "type": "event"
   }
 ] as const;

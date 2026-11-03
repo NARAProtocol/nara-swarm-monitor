@@ -42,6 +42,10 @@ export const NARALiquidityGrowthHookAbi = parseAbi([
   "event PoolFeeTaken(bytes32 indexed poolId,address indexed sender,address indexed currency,uint256 amountIn,uint256 feeAmount,uint16 feeBps,bool isBuy)",
   "event FeeCurveSet(bool indexed isBuyCurve,(uint32 mediumPressureBps,uint32 highPressureBps,uint32 extremePressureBps,uint16 baseFeeBps,uint16 mediumFeeBps,uint16 highFeeBps,uint16 extremeFeeBps,uint16 maxFeeBps) curve)",
   "event FeeCurveProposed(bool indexed isBuyCurve,(uint32 mediumPressureBps,uint32 highPressureBps,uint32 extremePressureBps,uint16 baseFeeBps,uint16 mediumFeeBps,uint16 highFeeBps,uint16 extremeFeeBps,uint16 maxFeeBps) curve,uint48 eta)",
+  "event RealizedFee(address indexed currency,uint64 indexed termsVersion,bool exactInput,uint256 requested,uint256 gross,uint256 poolInput,uint256 fee,uint256 output)",
+  "event TradingPauseChanged(bool paused,bytes32 indexed evidence)",
+  "event TermsCancelled(address indexed currency,uint64 indexed nonce)",
+  "event TermsApplied(address indexed currency,uint64 indexed version,uint64 effectiveAt)",
 ]);
 
 export const NARALiquidityGrowthVaultAbi = parseAbi([
@@ -58,6 +62,12 @@ export const NARALiquidityGrowthVaultAbi = parseAbi([
   "event RoutedToGenesis(address indexed caller,uint256 baseAmount)",
   "event SplitProcessed(address indexed caller,uint256 tokenToEngine,uint256 baseToEngine,uint256 tokenToCompound,uint256 baseToCompound,uint256 liquidityAdded)",
   "event GenesisSplitProcessed(address indexed caller,uint256 baseToGenesis,uint256 tokenToCompound,uint256 baseToCompound,uint256 liquidityAdded)",
+  "event FeeRecorded(uint8 indexed asset,bool indexed lpFee,uint256 amount,uint256 holders,uint256 pol)",
+  "event ClaimsRedeemed(uint8 indexed asset,uint256 holders,uint256 pol)",
+  "event HoldersForwarded(uint8 indexed asset,uint256 amount)",
+  "event POLFunded(uint8 indexed asset,address indexed payer,uint256 amount,bool returnedCapital)",
+  "event POLSpent(uint8 indexed asset,address indexed controller,uint256 amount)",
+  "event POLPauseChanged(bool paused,bytes32 indexed evidence)",
 ]);
 
 export const NARALiquidityCompounderAbi = parseAbi([

@@ -2210,5 +2210,58 @@ export const NARALiquidityGrowthHookAbi = [
     ],
     "stateMutability": "view",
     "type": "function"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true, "internalType": "address", "name": "currency", "type": "address" },
+      { "indexed": true, "internalType": "uint64", "name": "termsVersion", "type": "uint64" },
+      { "indexed": false, "internalType": "bool", "name": "exactInput", "type": "bool" },
+      { "indexed": false, "internalType": "uint256", "name": "requested", "type": "uint256" },
+      { "indexed": false, "internalType": "uint256", "name": "gross", "type": "uint256" },
+      { "indexed": false, "internalType": "uint256", "name": "poolInput", "type": "uint256" },
+      { "indexed": false, "internalType": "uint256", "name": "fee", "type": "uint256" },
+      { "indexed": false, "internalType": "uint256", "name": "output", "type": "uint256" }
+    ],
+    "name": "RealizedFee",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": false, "internalType": "bool", "name": "paused", "type": "bool" },
+      { "indexed": true, "internalType": "bytes32", "name": "evidence", "type": "bytes32" }
+    ],
+    "name": "TradingPauseChanged",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true, "internalType": "address", "name": "currency", "type": "address" },
+      { "indexed": true, "internalType": "uint64", "name": "nonce", "type": "uint64" }
+    ],
+    "name": "TermsCancelled",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true, "internalType": "address", "name": "currency", "type": "address" },
+      { "indexed": true, "internalType": "uint64", "name": "version", "type": "uint64" },
+      { "indexed": false, "internalType": "uint64", "name": "effectiveAt", "type": "uint64" }
+    ],
+    "name": "TermsApplied",
+    "type": "event"
+  },
+  {
+    "inputs": [
+      { "internalType": "bool", "name": "paused", "type": "bool" },
+      { "internalType": "bytes32", "name": "evidence", "type": "bytes32" }
+    ],
+    "name": "setTradingPaused",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
   }
 ] as const;

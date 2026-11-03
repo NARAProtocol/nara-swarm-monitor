@@ -72,7 +72,7 @@ ownership or current deployment language:
 - baskets origin: `NARAProtocol/nara_protocol_v4_baskets` protected `main`
   commit `2213f4a7e9fe3af984fc4b157d92169c91b015a0`;
 - active Base NARA token:
-  `0xB6333F5D4cEd8dffA80F3F13697D6aA3BB3f19c1`;
+  `0x91FB78A9F46B67f54BbD4489941d19666b2fAe0f`;
 - the canonical NARA/USDC pool is live with real assets in a technical live-
   testing phase; this is not a claim that a public product or every interface
   is available;
@@ -105,6 +105,9 @@ Before changing monitor logic, read:
 - The monitor is read-only with respect to protocol state.
 - The monitor never sends transactions.
 - The monitor never holds private keys.
+- The treasury Range Ranger is permanently retired. Do not revive it, add a
+  signer, or read `TREASURY_PRIVATE_KEY`; that variable must not be set in any
+  environment, and `RANGE_RANGER_*` variables are obsolete.
 - No monitor component may call contracts with write intent.
 
 ## Active Monitoring Scope

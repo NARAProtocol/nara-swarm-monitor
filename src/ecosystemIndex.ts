@@ -57,6 +57,10 @@ ponder.on("NARALiquidityGrowthHook:ProtocolDepthProposed", async ({ event, conte
 ponder.on("NARALiquidityGrowthHook:PoolFeeTaken", async ({ event, context }) => record("liquidity_hook", "pool_fee", event, context));
 ponder.on("NARALiquidityGrowthHook:FeeCurveSet", async ({ event, context }) => record("liquidity_hook", "fee_curve_set", event, context));
 ponder.on("NARALiquidityGrowthHook:FeeCurveProposed", async ({ event, context }) => record("liquidity_hook", "fee_curve_proposed", event, context));
+ponder.on("NARALiquidityGrowthHook:RealizedFee", async ({ event, context }) => record("liquidity_hook", "realized_fee", event, context));
+ponder.on("NARALiquidityGrowthHook:TradingPauseChanged", async ({ event, context }) => record("liquidity_hook", "trading_pause_changed", event, context));
+ponder.on("NARALiquidityGrowthHook:TermsCancelled", async ({ event, context }) => record("liquidity_hook", "terms_cancelled", event, context));
+ponder.on("NARALiquidityGrowthHook:TermsApplied", async ({ event, context }) => record("liquidity_hook", "terms_applied", event, context));
 
 ponder.on("NARALiquidityGrowthVault:CompounderSet", async ({ event, context }) => record("liquidity_vault", "compounder_set", event, context));
 ponder.on("NARALiquidityGrowthVault:CompounderFrozen", async ({ event, context }) => record("liquidity_vault", "compounder_frozen", event, context));
@@ -67,6 +71,12 @@ ponder.on("NARALiquidityGrowthVault:RoutedToEngine", async ({ event, context }) 
 ponder.on("NARALiquidityGrowthVault:RoutedToGenesis", async ({ event, context }) => record("liquidity_vault", "genesis_route", event, context));
 ponder.on("NARALiquidityGrowthVault:SplitProcessed", async ({ event, context }) => record("liquidity_vault", "split", event, context));
 ponder.on("NARALiquidityGrowthVault:GenesisSplitProcessed", async ({ event, context }) => record("liquidity_vault", "genesis_split", event, context));
+ponder.on("NARALiquidityGrowthVault:FeeRecorded", async ({ event, context }) => record("liquidity_vault", "fee_recorded", event, context));
+ponder.on("NARALiquidityGrowthVault:ClaimsRedeemed", async ({ event, context }) => record("liquidity_vault", "claims_redeemed", event, context));
+ponder.on("NARALiquidityGrowthVault:HoldersForwarded", async ({ event, context }) => record("liquidity_vault", "holders_forwarded", event, context));
+ponder.on("NARALiquidityGrowthVault:POLFunded", async ({ event, context }) => record("liquidity_vault", "pol_funded", event, context));
+ponder.on("NARALiquidityGrowthVault:POLSpent", async ({ event, context }) => record("liquidity_vault", "pol_spent", event, context));
+ponder.on("NARALiquidityGrowthVault:POLPauseChanged", async ({ event, context }) => record("liquidity_vault", "pol_pause_changed", event, context));
 
 ponder.on("NARALiquidityCompounder:Compounded", async ({ event, context }) => record("liquidity_compounder", "compound", event, context));
 ponder.on("NARALiquidityCompounder:RecoveryProposed", async ({ event, context }) => record("liquidity_compounder", "recovery_proposed", event, context));

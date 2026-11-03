@@ -3,9 +3,41 @@ import { resolve } from "node:path";
 
 console.log("🚀 Starting NARA Swarm Monitor, Telegram Console & Autonomous Scheduler...");
 
+// The treasury Range Ranger is permanently retired (audit-runs/2026-09-24-range-manager/REPORT.md,
+// OFF-001, OFF-002, OFF-003 and OFF-008). Fail closed before any child process starts, the
+// validator included, if its Safe owner key or its autonomous-execution switch is still configured.
+const retiredRangeRangerErrors = [];
+if (process.env.TREASURY_PRIVATE_KEY !== undefined) {
+  retiredRangeRangerErrors.push("TREASURY_PRIVATE_KEY is set. Remove TREASURY_PRIVATE_KEY from this environment; no Safe owner key may be present in any monitor environment.");
+}
+const rangeRangerAutoExecute = String(process.env.RANGE_RANGER_AUTO_EXECUTE ?? "").trim().toLowerCase();
+if (rangeRangerAutoExecute && !["false", "0", "no", "off"].includes(rangeRangerAutoExecute)) {
+  retiredRangeRangerErrors.push("RANGE_RANGER_AUTO_EXECUTE is enabled. Remove RANGE_RANGER_AUTO_EXECUTE from this environment; autonomous treasury execution is permanently disabled.");
+}
+if (retiredRangeRangerErrors.length !== 0) {
+  for (const message of retiredRangeRangerErrors) console.error(`Startup refused: ${message}`);
+  console.error("The Range Ranger is retired. See audit-runs/2026-09-24-range-manager/REPORT.md.");
+  process.exit(1);
+}
+
+// Signing material never reaches a child process (OFF-002). Inventory on 2026-09-24: no child
+// (validator, Ponder with ponder.config.ts, config/ and src/, Telegram listener, large-buy watcher,
+// epoch sentinel, monitor cycle and the npm scripts it runs) reads a variable whose name contains
+// PRIVATE_KEY, MNEMONIC or SEED. The only reader was the retired Range Ranger watcher
+// (TREASURY_PRIVATE_KEY), so every such variable is withheld from every child. A future child that
+// genuinely needs one must be given it explicitly and reviewed.
+const signingSecretName = /PRIVATE_KEY|MNEMONIC|SEED/i;
+const withheldSecretNames = Object.keys(process.env).filter((name) => signingSecretName.test(name));
+if (withheldSecretNames.length !== 0) {
+  console.warn(`Withholding ${withheldSecretNames.join(", ")} from every child process; the monitor never needs signing material.`);
+}
+const childBaseEnv = Object.fromEntries(
+  Object.entries(process.env).filter(([name]) => !signingSecretName.test(name)),
+);
+
 const validation = spawnSync(process.execPath, ["scripts/validateFreshV4Env.mjs", "--no-env-files"], {
   stdio: "inherit",
-  env: process.env,
+  env: childBaseEnv,
 });
 if (validation.status !== 0) {
   process.exit(validation.status ?? 1);
@@ -13,7 +45,7 @@ if (validation.status !== 0) {
 
 const databaseSchema = process.env.DATABASE_SCHEMA.trim();
 const runtimeEnv = {
-  ...process.env,
+  ...childBaseEnv,
   PGOPTIONS: `-c search_path=${databaseSchema}`,
 };
 
@@ -21,7 +53,6 @@ let shuttingDown = false;
 let ponder;
 let bot;
 let largeBuyWatcher;
-let rangeRangerWatcher;
 
 function scheduleRestart(label, start) {
   if (shuttingDown) return;
@@ -100,29 +131,8 @@ if (["true", "1"].includes(String(process.env.LARGE_BUY_ALERT_ENABLED || "false"
   startLargeBuyWatcher();
 }
 
-// 4. Independent Range Ranger market structure & tactical rebalance watcher.
-if (["true", "1"].includes(String(process.env.RANGE_RANGER_ALERT_ENABLED || "false").toLowerCase())) {
-  const startRangeRanger = () => {
-    let stopped = false;
-    const handleStop = () => {
-      if (stopped) return;
-      stopped = true;
-      rangeRangerWatcher = undefined;
-      scheduleRestart("Range Ranger watcher", startRangeRanger);
-    };
-    console.log("🏹 Starting Range Ranger market structure & tactical rebalance watcher...");
-    rangeRangerWatcher = spawn(process.execPath, ["scripts/rangeRangerWatcher.mjs"], {
-      stdio: "inherit",
-      env: runtimeEnv,
-    });
-    rangeRangerWatcher.on("exit", handleStop);
-    rangeRangerWatcher.on("error", (error) => {
-      console.error("Range Ranger failed to start:", error.message);
-      handleStop();
-    });
-  };
-  startRangeRanger();
-}
+// 4. The Range Ranger is retired. It is never started, whatever any RANGE_RANGER_* variable says.
+console.log("🏹 Range Ranger is retired and is not started; RANGE_RANGER_* variables are ignored. See audit-runs/2026-09-24-range-manager/REPORT.md.");
 
 // 4. Independent epoch sentinel. It has no Ponder, database, Commander, or
 // summarizer dependency and runs more frequently than the broad monitor cycle.
@@ -201,7 +211,6 @@ for (const signal of ["SIGINT", "SIGTERM"]) {
     ponder?.kill("SIGTERM");
     bot?.kill("SIGTERM");
     largeBuyWatcher?.kill("SIGTERM");
-    rangeRangerWatcher?.kill("SIGTERM");
     process.exit(0);
   });
 }

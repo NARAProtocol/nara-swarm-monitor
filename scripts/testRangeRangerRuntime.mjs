@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import {
   TICK_SPACING,
   tickToPriceUsdc,
@@ -235,6 +236,47 @@ console.log("Running Dynamic Range Ranger Runtime Tests...\n");
   assert.ok(msg.includes("Deployed 5 Sell Bands"), "Message should report 5 deployed sell bands");
   assert.ok(typeof executeAutonomousSafeBatch === "function", "executeAutonomousSafeBatch should be exported function");
   console.log("✔ 7. Autonomous execution Telegram card formatting passed.");
+}
+
+// 8. Autonomous Safe execution is retired: it refuses before touching any client or key
+{
+  const untouchable = new Proxy({}, {
+    get() {
+      throw new Error("the retired executor must not touch a client");
+    },
+  });
+  assert.throws(
+    () => executeAutonomousSafeBatch({ publicClient: untouchable, walletClient: untouchable, transactions: [] }),
+    /Range Ranger retired/,
+    "executeAutonomousSafeBatch must refuse immediately",
+  );
+  console.log("✔ 8. Autonomous Safe execution is retired and refuses before any signing.");
+}
+
+// 9. The watcher entry point exits as retired, whatever flags or env are supplied
+{
+  const keySentinel = "range-ranger-key-sentinel-should-not-print";
+  const watcher = spawnSync(process.execPath, ["scripts/rangeRangerWatcher.mjs", "--once"], {
+    encoding: "utf8",
+    timeout: 30_000,
+    env: {
+      ...process.env,
+      RANGE_RANGER_ALERT_ENABLED: "true",
+      RANGE_RANGER_AUTO_EXECUTE: "true",
+      TREASURY_PRIVATE_KEY: keySentinel,
+      BASE_RPC_URL: "http://127.0.0.1:9",
+      BASE_BACKUP_RPC_URL_1: "",
+      BASE_BACKUP_RPC_URL_2: "",
+      TELEGRAM_BOT_TOKEN: "",
+      TELEGRAM_CHAT_ID: "",
+    },
+  });
+  assert.equal(watcher.status, 0, "the retired watcher exits cleanly");
+  assert.match(watcher.stdout, /Range Ranger is retired/, "the watcher says it is retired");
+  assert.match(watcher.stdout, /audit-runs\/2026-09-24-range-manager\/REPORT\.md/, "the watcher cites the audit");
+  assert.doesNotMatch(watcher.stdout, /Watcher starting/, "no watcher loop starts");
+  assert.doesNotMatch(watcher.stdout + watcher.stderr, new RegExp(keySentinel), "the key value is never printed");
+  console.log("✔ 9. Range Ranger watcher entry point exits as retired.");
 }
 
 console.log("\n🎉 ALL DYNAMIC RANGE RANGER RUNTIME TESTS PASSED!\n");

@@ -133,11 +133,18 @@ export function classifyFailedFunction(contractName, functionName) {
     return { functionGroup: "admin_function", riskCategory: "admin_revert", callPath: "direct_admin" };
   }
 
-  if (functionName === "lock" || functionName === "lockWithPermit" || functionName === "onTransferReceived") {
+  if (
+    functionName === "lock" ||
+    functionName === "lockWithPermit" ||
+    functionName === "onTransferReceived" ||
+    functionName === "create" ||
+    functionName === "rechargeCommon" ||
+    functionName === "rechargeAwarded"
+  ) {
     return { functionGroup: "engine_lock", riskCategory: "lock_revert", callPath: "lock" };
   }
 
-  if (functionName === "unlock" || isNameMatch(functionName, ["unlock", "burneternalgenesis"])) {
+  if (functionName === "unlock" || functionName === "withdrawPrincipal" || isNameMatch(functionName, ["unlock", "burneternalgenesis"])) {
     return { functionGroup: "engine_unlock", riskCategory: "unlock_revert", callPath: "unlock" };
   }
 
@@ -153,7 +160,7 @@ export function classifyFailedFunction(contractName, functionName) {
     return { functionGroup: "extend", riskCategory: "user_revert", callPath: "user" };
   }
 
-  if (contractName === "NARAPositionNFTV4" && isNameMatch(functionName, ["mint", "wrap"])) {
+  if (contractName === "NARAPositionNFTV4" && isNameMatch(functionName, ["mint", "wrap", "materializedormant"])) {
     return { functionGroup: "nft_mint_or_wrap", riskCategory: "lock_revert", callPath: "lock" };
   }
 
@@ -180,7 +187,17 @@ function extractKnownArgs(functionName, functionGroup, args) {
   let tokenId = null;
   let amount = null;
 
-  if (functionGroup === "engine_lock") amount = bigintArg(args[0]);
+  if (functionGroup === "engine_lock") {
+    const firstArg = args[0];
+    if (functionName === "create") {
+      amount = bigintArg(firstArg?.amount ?? firstArg?.[0] ?? firstArg);
+    } else if (functionName === "rechargeCommon") {
+      positionId = bigintArg(firstArg?.positionId ?? firstArg?.[0]);
+      amount = bigintArg(firstArg?.funding?.amount ?? firstArg?.funding?.[0]);
+    } else {
+      amount = bigintArg(firstArg);
+    }
+  }
   if (["engine_unlock", "claim", "extend"].includes(functionGroup)) positionId = bigintArg(args[0]);
   if (["nft_claim", "nft_mint_or_wrap"].includes(functionGroup)) {
     const maybeTokenId = bigintArg(args[0]);
@@ -557,7 +574,12 @@ export function activeContractsFromEnv(env = process.env) {
     throw new Error(`Missing active v4 contract address env vars: ${missing.join(", ")}`);
   }
 
-  return envTargets.map(([envName, contractName]) => ({
+  const optionalV5Targets = [
+    ["V5_PRINCIPAL_LEDGER", "NARAEngine"],
+    ["V5_REWARD_LEDGER", "NARAEngine"],
+  ].filter(([envName]) => env[envName] && normalizeAddress(env[envName]) !== ZERO_ADDRESS);
+
+  return [...envTargets, ...optionalV5Targets].map(([envName, contractName]) => ({
     contractName,
     address: env[envName],
   }));

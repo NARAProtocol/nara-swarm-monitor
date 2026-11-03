@@ -2367,6 +2367,534 @@ export const NARAEngineAbi = [
     "type": "function"
   },
   {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint64",
+        "name": "epoch",
+        "type": "uint64"
+      },
+      {
+        "indexed": true,
+        "internalType": "bytes32",
+        "name": "graphHash",
+        "type": "bytes32"
+      },
+      {
+        "components": [
+          {
+            "internalType": "uint256",
+            "name": "principalSnapshot",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "protectedRewardSnapshot",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "reserveSnapshot",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "modelFloat",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "modelWeight",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "rewardWeight",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "requested",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "delivered",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint8",
+            "name": "status",
+            "type": "uint8"
+          },
+          {
+            "components": [
+              {
+                "internalType": "uint256",
+                "name": "baseEmission",
+                "type": "uint256"
+              },
+              {
+                "internalType": "uint256",
+                "name": "warmupFactorWad",
+                "type": "uint256"
+              },
+              {
+                "internalType": "uint256",
+                "name": "stressWad",
+                "type": "uint256"
+              },
+              {
+                "internalType": "uint256",
+                "name": "bootstrapWeight",
+                "type": "uint256"
+              }
+            ],
+            "internalType": "struct EmissionState",
+            "name": "nextModelState",
+            "type": "tuple"
+          }
+        ],
+        "indexed": false,
+        "internalType": "struct EpochSettlementV5",
+        "name": "settlement",
+        "type": "tuple"
+      }
+    ],
+    "name": "EpochSettled",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "sequence",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "uint64",
+        "name": "eligibleEpoch",
+        "type": "uint64"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      }
+    ],
+    "name": "ReserveFundingRecorded",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "positionId",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "uint64",
+        "name": "generation",
+        "type": "uint64"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "owner",
+        "type": "address"
+      },
+      {
+        "components": [
+          {
+            "internalType": "address",
+            "name": "generationOwner",
+            "type": "address"
+          },
+          {
+            "internalType": "uint64",
+            "name": "generation",
+            "type": "uint64"
+          },
+          {
+            "internalType": "uint64",
+            "name": "createdEpoch",
+            "type": "uint64"
+          },
+          {
+            "internalType": "uint64",
+            "name": "activation",
+            "type": "uint64"
+          },
+          {
+            "internalType": "uint64",
+            "name": "maturity",
+            "type": "uint64"
+          },
+          {
+            "internalType": "uint64",
+            "name": "effectiveEnd",
+            "type": "uint64"
+          },
+          {
+            "internalType": "uint32",
+            "name": "duration",
+            "type": "uint32"
+          },
+          {
+            "internalType": "uint256",
+            "name": "principal",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "modelWeight",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "rewardWeight",
+            "type": "uint256"
+          },
+          {
+            "internalType": "bool",
+            "name": "earlyExitEnabled",
+            "type": "bool"
+          },
+          {
+            "internalType": "uint16",
+            "name": "earlyExitBps",
+            "type": "uint16"
+          },
+          {
+            "internalType": "uint256",
+            "name": "penalty",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "penaltyCapacityReserved",
+            "type": "uint256"
+          },
+          {
+            "internalType": "bool",
+            "name": "withdrawn",
+            "type": "bool"
+          },
+          {
+            "internalType": "bytes32",
+            "name": "termsHash",
+            "type": "bytes32"
+          }
+        ],
+        "indexed": false,
+        "internalType": "struct PositionState",
+        "name": "position",
+        "type": "tuple"
+      }
+    ],
+    "name": "PositionCreated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "positionId",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "uint64",
+        "name": "generation",
+        "type": "uint64"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "recipient",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      }
+    ],
+    "name": "PrincipalWithdrawn",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "positionId",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "uint64",
+        "name": "generation",
+        "type": "uint64"
+      },
+      {
+        "indexed": true,
+        "internalType": "uint8",
+        "name": "asset",
+        "type": "uint8"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "recipient",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      }
+    ],
+    "name": "RewardClaimed",
+    "type": "event"
+  },
+  {
+    "inputs": [
+      {
+        "components": [
+          {
+            "internalType": "uint256",
+            "name": "amount",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint32",
+            "name": "duration",
+            "type": "uint32"
+          },
+          {
+            "internalType": "bytes32",
+            "name": "expectedPolicyHash",
+            "type": "bytes32"
+          },
+          {
+            "internalType": "uint64",
+            "name": "deadline",
+            "type": "uint64"
+          }
+        ],
+        "internalType": "struct CreateRequest",
+        "name": "request",
+        "type": "tuple"
+      }
+    ],
+    "name": "create",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "id",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint64",
+        "name": "generation",
+        "type": "uint64"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "id",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint64",
+        "name": "generation",
+        "type": "uint64"
+      },
+      {
+        "internalType": "address",
+        "name": "recipient",
+        "type": "address"
+      }
+    ],
+    "name": "withdrawPrincipal",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "paid",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "components": [
+          {
+            "internalType": "uint256",
+            "name": "positionId",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint64",
+            "name": "expectedGeneration",
+            "type": "uint64"
+          },
+          {
+            "internalType": "uint256",
+            "name": "dormantTokenId",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "expectedTransferNonce",
+            "type": "uint256"
+          },
+          {
+            "components": [
+              {
+                "internalType": "uint256",
+                "name": "amount",
+                "type": "uint256"
+              },
+              {
+                "internalType": "uint32",
+                "name": "duration",
+                "type": "uint32"
+              },
+              {
+                "internalType": "bytes32",
+                "name": "expectedPolicyHash",
+                "type": "bytes32"
+              },
+              {
+                "internalType": "uint64",
+                "name": "deadline",
+                "type": "uint64"
+              }
+            ],
+            "internalType": "struct CreateRequest",
+            "name": "funding",
+            "type": "tuple"
+          }
+        ],
+        "internalType": "struct CommonRechargeRequestV5",
+        "name": "request",
+        "type": "tuple"
+      }
+    ],
+    "name": "rechargeCommon",
+    "outputs": [
+      {
+        "internalType": "uint64",
+        "name": "generation",
+        "type": "uint64"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "id",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint64",
+        "name": "generation",
+        "type": "uint64"
+      },
+      {
+        "internalType": "uint8",
+        "name": "asset",
+        "type": "uint8"
+      },
+      {
+        "internalType": "address",
+        "name": "recipient",
+        "type": "address"
+      }
+    ],
+    "name": "claim",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "paid",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint32",
+        "name": "maxEpochs",
+        "type": "uint32"
+      }
+    ],
+    "name": "advance",
+    "outputs": [
+      {
+        "components": [
+          {
+            "internalType": "uint64",
+            "name": "fromEpoch",
+            "type": "uint64"
+          },
+          {
+            "internalType": "uint64",
+            "name": "nextEpochToClose",
+            "type": "uint64"
+          },
+          {
+            "internalType": "uint64",
+            "name": "remainingBacklog",
+            "type": "uint64"
+          },
+          {
+            "internalType": "uint32",
+            "name": "closedCount",
+            "type": "uint32"
+          },
+          {
+            "internalType": "uint32",
+            "name": "failedReserveCalls",
+            "type": "uint32"
+          }
+        ],
+        "internalType": "struct AdvanceResult",
+        "name": "",
+        "type": "tuple"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
     "stateMutability": "payable",
     "type": "receive"
   }

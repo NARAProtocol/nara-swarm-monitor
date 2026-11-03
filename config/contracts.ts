@@ -38,6 +38,21 @@ const profileAddress = (name: string) =>
 const profileAddresses = (name: string) =>
   isFullProfile ? requireFreshV4Addresses(name) : optionalFreshV4Addresses(name);
 
+export const V5_PRINCIPAL_LEDGER_ADDRESS = optionalFreshV4Address("V5_PRINCIPAL_LEDGER");
+export const V5_REWARD_LEDGER_ADDRESS = optionalFreshV4Address("V5_REWARD_LEDGER");
+export const V5_EMISSION_RESERVE_ADDRESS = optionalFreshV4Address("V5_EMISSION_RESERVE");
+export const V5_FORGE_ADDRESS = optionalFreshV4Address("V5_FORGE");
+export const V5_POSITION_SALE_ADDRESS = optionalFreshV4Address("V5_POSITION_SALE");
+export const V5_POOL_ORACLE_ADDRESS = optionalFreshV4Address("V5_POOL_ORACLE");
+export const V5_TREASURY_RANGE_MANAGER_ADDRESS = optionalFreshV4Address("V5_TREASURY_RANGE_MANAGER");
+
+const engineCoreAddress = requireFreshV4Address("V4_ENGINE");
+const engineModuleAddresses = [
+  engineCoreAddress,
+  ...(V5_PRINCIPAL_LEDGER_ADDRESS ? [V5_PRINCIPAL_LEDGER_ADDRESS] : []),
+  ...(V5_REWARD_LEDGER_ADDRESS ? [V5_REWARD_LEDGER_ADDRESS] : []),
+] as const;
+
 export const CONTRACTS = {
   token: {
     address: requireFreshV4Address("V4_NARA_TOKEN"),
@@ -45,7 +60,7 @@ export const CONTRACTS = {
     startBlock,
   },
   engine: {
-    address: requireFreshV4Address("V4_ENGINE"),
+    address: engineModuleAddresses.length === 1 ? engineCoreAddress : engineModuleAddresses,
     abi: NARAEngineAbi,
     startBlock,
   },
