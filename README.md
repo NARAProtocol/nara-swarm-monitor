@@ -6,7 +6,7 @@
 [![Ponder](https://img.shields.io/badge/indexer-Ponder-111111)](https://ponder.sh/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 
-Read-only operations intelligence for the fresh NARA v4 protocol on Base.
+Read-only operations intelligence for NARA Protocol V5 on Base Mainnet.
 
 NARA Swarm Monitor indexes protocol events, derives operational signals, scans
 failed transactions, and exposes evidence through a read-only API. It is built
@@ -14,12 +14,12 @@ to fail closed: an unknown, retired, or incomplete deployment configuration
 stops startup instead of silently monitoring the wrong contracts.
 
 > [!IMPORTANT]
-> This repository monitors the fresh v4 deployment only. It does not send
-> protocol transactions, hold signing keys, or support retired v3 contracts.
+> This repository monitors the active NARA Protocol V5 deployment on Base Mainnet (Chain ID `8453`). It does not send
+> protocol transactions, hold signing keys, or support retired v3 or legacy v4 contracts.
 
 > [!WARNING]
 > **Technical live testing on Base mainnet — not public product availability.**
-> The monitored canonical v4 contracts and NARA/USDC pool use real assets.
+> The monitored canonical V5 contracts and NARA/USDC pool use real assets.
 > Alerts, scores, reports, wallet views, and summaries are operator telemetry,
 > not investment research, trading signals, personalized advice, or
 > recommendations to transact. This repository does not establish that any
@@ -79,10 +79,7 @@ Deferred contracts use empty address lists in `core`. The monitor never invents
 placeholder production addresses or deploys contracts merely to satisfy its
 configuration.
 
-The Position NFT Phase-2 baseline is deployed, tested under its recorded
-release gates, source-verified, and Safe-finalized. It remains intentionally
-unset because the canonical manifest records `integrationReady: false`;
-deployment alone does not authorize consumer integration.
+The V5 modular contract suite (including `NARAEpochEngineV5`, `NARAPrincipalLedgerV5`, `NARARewardLedgerV5`, `NARAPositionNFTV5`, `NARAPositionSaleV5`, `NARALiquidityHookV5`, `NARAFeeVaultV5`, and `NARATreasuryRangeManagerV5`) is deployed and source-verified on Base Mainnet (`8453`, verification block `53,422,831`). Optional V5 modular surfaces are configured via the `V5_*` environment variables documented in [`docs/ENVIRONMENT_VARIABLES.md`](docs/ENVIRONMENT_VARIABLES.md).
 
 ## Quick Start
 

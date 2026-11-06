@@ -30,9 +30,7 @@ print key names and whether a key is present.
   contains another Ponder app.
 
 `V4_START_BLOCK`
-: Fresh v4 deployment scan start. The current verified deployment evidence
-  records `49718979`; verify this against the pinned manifest before changing
-  it. Must be a positive integer.
+: Deployment scan start block on Base Mainnet. The verified V5 deployment checkpoint block is `53422831` (historical v4 launch receipt block was `49718979`); verify this against the pinned deployment manifest before changing it. Must be a positive integer.
 
 `V4_EPOCH_LENGTH_SECONDS`
 : Deployed engine epoch length in seconds. Do not assume the default unless the
@@ -87,10 +85,7 @@ retired incident-stack addresses.
 : Fresh active v4 `NARAEngine`.
 
 `V4_POSITION_NFT`
-: Deployed, tested under its recorded release gates, source-verified, and
-  Safe-finalized v4 `NARAPositionNFTV4`. Leave it unset in the core profile
-  while the canonical manifest records `integrationReady: false`; an immutable
-  integration-ready handoff is still required.
+: Active Position NFT contract address (`NARAPositionNFTV5` `0x8C5F088D9d09dBB90aB6F3aaA049a8FD5D5FfFDA` on V5). Optional in the `core` profile.
 
 `V4_BOND_DEPOSITORY_NFT`
 : Fresh active v4 `NARABondDepositoryV4NFT`, the NFT launch-path depository.
