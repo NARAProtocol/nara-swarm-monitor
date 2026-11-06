@@ -1,6 +1,6 @@
 # NARA Swarm Monitor Agent Rules
 
-This repository is v4-only.
+This repository monitors active NARA Protocol deployments on Base Mainnet (`8453`).
 
 ## Cross-Repository Role
 
@@ -16,11 +16,8 @@ block only from verified deployment evidence. Schema work may begin from a
 merged implementation, but the monitor must remain unconnected until deployed
 state is verified.
 
-In the FIELD workspace, read
-`../docs/NARA_CROSS_REPOSITORY_RELEASE_PROTOCOL.md` before any
-multi-repository update. Record the origin commit, artifact source, manifest,
-chain, start block, backfill result, and downstream public-documentation impact
-in the pull request.
+Record the origin commit, artifact source, manifest, chain, start block,
+backfill result, and downstream public-documentation impact in the pull request.
 
 The explicit cross-repository ABI gate is `npm run check:ecosystem-drift`.
 Before running it, fetch both producer remotes and set
@@ -57,77 +54,56 @@ The v3 protocol is dead and retired. Do not use, import, index, document, or
 default to any v3 contract, ABI, address, event model, cron model, jackpot,
 lotto, arena, or mining assumption.
 
-The monitor exists only for the fresh NARA v4 redeploy from:
-
-`../nara-protocol-hardhat/contracts/v4/`
-
 ## Current Documentation Handoff
 
-Cold AI agents must use change ID
-`NARA-20260830-documentation-convergence` without rediscovering repository
-ownership or current deployment language:
+Maintainers and automated verifiers must respect the verified Base Mainnet state:
 
-- protocol origin: `NARAProtocol/nara_protocol_v4` protected `main` commit
-  `dae88079dd336e22bdefde6f45e3b01389d554cb`;
-- baskets origin: `NARAProtocol/nara_protocol_v4_baskets` protected `main`
-  commit `2213f4a7e9fe3af984fc4b157d92169c91b015a0`;
-- active Base NARA token:
-  `0x91FB78A9F46B67f54BbD4489941d19666b2fAe0f`;
-- the canonical NARA/USDC pool is live with real assets in a technical live-
-  testing phase; this is not a claim that a public product or every interface
-  is available;
-- the Position NFT Phase-2 baseline is deployed, tested under its recorded
-  release gates, source-verified, and Safe-finalized, but its canonical
-  manifest still has `integrationReady: false`; and
+- active Base NARA token (`NARATokenV5`):
+  `0x91FB78A9F46B67f54BbD4489941d19666b2fAe0f` (`1,000,000 NARA` fixed supply);
+- verified V5 deployment checkpoint block: `53422831` (`NARAPositionSaleV5` deployed at block `53443166`);
+- the canonical NARA/USDC Uniswap v4 pool (`0x3bd8b60dc9eb37f00afa57585232e4018ae661b2dbd5318562183a67a07ac758`) and 34-contract V5 suite are deployed on Base Mainnet in a technical live-testing phase; this is not a claim that a public product or every interface is available; and
 - baskets remain undeployed and preview-only.
 
 Changing facts still come from the pinned manifests and release evidence, not
-from this summary. Do not use the historical `0x65E...` token as current.
+from this summary. Never use any retired historical token address.
 
-Before changing monitor logic, read:
-
-- `../AGENTS.md`
-- `../nara-protocol-hardhat/AGENTS.md`
-- `../nara-protocol-hardhat/CLAUDE.md`
-- `../nara-protocol-hardhat/docs/CURRENT_STATE.md`
+Before changing monitor logic, read `README.md`, `docs/MONITOR_ARCHITECTURE.md`,
+and `docs/ENVIRONMENT_VARIABLES.md`.
 
 ## Runtime Rules
 
-- Fresh v4 addresses must come from environment variables.
+- Active protocol addresses must come from environment variables.
 - Never provide fallback addresses for protocol contracts.
-- Never use retired incident-stack addresses as defaults.
-- Never use the retired v3 token or engine addresses.
+- Never use retired incident-stack or v3 addresses as defaults.
 - If an address is not known because that deferred component is not deployed,
   leave it unset and let the full monitor profile fail closed.
-- `V4_START_BLOCK` is mandatory and must come from the fresh v4 deployment.
-- Hand-written ABIs are temporary only. Prefer generated ABIs from the active
-  v4 Hardhat artifacts.
+- `V4_START_BLOCK` is mandatory and must come from the verified deployment block (`53422831` for V5).
+- Prefer generated ABIs from verified protocol artifacts.
 - The monitor is read-only with respect to protocol state.
 - The monitor never sends transactions.
 - The monitor never holds private keys.
-- The treasury Range Ranger is permanently retired. Do not revive it, add a
+- The legacy treasury Range Ranger is permanently retired. Do not revive it, add a
   signer, or read `TREASURY_PRIVATE_KEY`; that variable must not be set in any
   environment, and `RANGE_RANGER_*` variables are obsolete.
 - No monitor component may call contracts with write intent.
 
 ## Active Monitoring Scope
 
-Use active v4 concepts only:
+Use active protocol concepts only:
 
 - NARA token transfers and approvals
-- Engine locks, extensions, unlocks, epoch advances, rewards, and parameters
-- Position NFT mints, transfers, claims, Genesis metadata, and burns
-- Genesis reward distributor events
-- Bond vault and v4/NFT depository events
-- Liquidity growth hook, vault, and compounder events
-- Router and bribe router events
-- AccessControl, Ownable, Ownable2Step, Pausable, and emergency sweep events
+- Epoch engine commitments, recharges, withdrawals, epoch advances, and reward settlements
+- Principal ledger, reward ledger, and emission reserve events
+- Position NFT (`NARAP`) mints, transfers, and secondary sale marketplace events
+- Forge roll and fusion lifecycle events
+- Liquidity hook, fee vault, POL position, capital policy, and treasury range manager events
+- AccessControl, Ownable, Ownable2Step, Pausable, and governance delay events
 
 ## Current Monitor Architecture
 
-- Ponder indexes active v4 events and call traces.
+- Ponder indexes active protocol events and call traces.
 - The failed transaction scanner is read-only and records reverted attempts
-  against active v4 contract addresses.
+  against monitored contract addresses.
 - Deterministic rules create alerts from indexed tables and views.
 - Commander Agent v1 is deterministic read-only reporting.
 - AI Summarizer v1 only summarizes `commander_reports`.
@@ -135,16 +111,12 @@ Use active v4 concepts only:
 ## Current Deployment Warning
 
 - The current Ponder configuration supports `MONITOR_PROFILE=core` for the
-  deployed token, engine, liquidity hook, vault, and compounder.
+  deployed token, engine, liquidity hook, vault, and compounder, plus optional `V5_*` modular surfaces.
 - Do not invent or reuse addresses to make the full profile boot.
 - The deployed core and canonical pool are in technical live testing with real
   assets. Monitoring them does not establish public product availability,
   production readiness, safety, legal approval, or availability in any
   jurisdiction.
-- The Position NFT deployment is real, tested, source-verified, and
-  Safe-finalized. Leave it unconnected because the canonical manifest remains
-  `integrationReady: false`; deployment alone is not downstream integration
-  authority.
 - Do not deploy bond, router, lockboard, composability, or other deferred
   surfaces merely to satisfy the indexer. A dedicated basket profile is
   required only after verified basket manager and fee collector deployments
@@ -167,7 +139,7 @@ Use active v4 concepts only:
   They must never be framed as investment research, trading signals,
   personalized advice, asset rankings, or recommendations to transact.
 
-## Explicitly Out Of Scope Unless Rebuilt For v4
+## Explicitly Out Of Scope
 
 - v3 contracts
 - retired incident-stack contracts
@@ -177,6 +149,3 @@ Use active v4 concepts only:
 - mining
 - MisterMint
 - any archived `legacy-v3` ABI or address
-
-If a cold AI tries to add any of those back, stop and verify against the active
-v4 source first.

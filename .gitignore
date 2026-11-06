@@ -30,4 +30,5 @@ deployments/
 
 # Local IDE config
 opencode.json
+.worktrees/
 
