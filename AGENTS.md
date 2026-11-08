@@ -60,8 +60,8 @@ Maintainers and automated verifiers must respect the verified Base Mainnet state
 
 - active Base NARA token (`NARATokenV5`):
   `0x91FB78A9F46B67f54BbD4489941d19666b2fAe0f` (`1,000,000 NARA` fixed supply);
-- verified V5 deployment checkpoint block: `53422831` (`NARAPositionSaleV5` deployed at block `53443166`);
-- the canonical NARA/USDC Uniswap v4 pool (`0x3bd8b60dc9eb37f00afa57585232e4018ae661b2dbd5318562183a67a07ac758`) and 34-contract V5 suite are deployed on Base Mainnet in a technical live-testing phase; this is not a claim that a public product or every interface is available; and
+- verified V5 deployment checkpoint block: `54778829` (core deployed at `53409717..53422831`, `NARAPositionSaleV5` & Zero-Lock Fee Periphery deployed at `53944327..53944337`, `Safe Nonce 9` `49,997 NARA` withdrawal queued at `54356981`, and Active-Pool `NARATreasuryRangeManagerV5` `0x221c625d2BC416460C397035C1286C1f4A4D3A7C` pre-funded with `51.0149 NARA` at `54778829`);
+- the canonical NARA/USDC Uniswap v4 pool (`0x4a475299ef674bcc3d2c87c3917cfbecd38cf7237646a3553e37daba67da6e5f`) and 35-contract V5 suite (`NARALiquidityHookV5` `0x07d8F2Dfd121B10dE3176DeAb6A8C0eaa2646aCC`, `NARAFeeVaultV5` `0xF1f361F803895BF5cf67eC6C506dbFEf2f6E88Cf`, `NARATreasuryFeeControllerV5` `0xB6A436b48222C94fe427ecAfB263DF9cf42646b9`, `NARAPoolOracleV5` `0xBCF29E9E37E62FBB996D5FF890FEd5280fC02e1A`, Active `NARATreasuryRangeManagerV5` `0x221c625d2BC416460C397035C1286C1f4A4D3A7C`) are deployed on Base Mainnet in a technical live-testing phase; this is not a claim that a public product or every interface is available; and
 - baskets remain undeployed and preview-only.
 
 Changing facts still come from the pinned manifests and release evidence, not
