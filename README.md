@@ -29,6 +29,15 @@ stops startup instead of silently monitoring the wrong contracts.
 > transactions are irreversible, liquidity may be limited, and token values
 > can fall to zero.
 
+## 🧭 Start Here by Audience (4-Persona Router)
+
+| Audience / Role | Primary Documentation & Entry Points |
+| :--- | :--- |
+| **👤 Everyday Users & Community** | [**Public Documentation Hub (`NARAProtocol/nara_protocol`)**](https://github.com/NARAProtocol/nara_protocol) · [**Telegram Console Bot (`@naraswarmbot`)**](#-what-it-does) |
+| **🛠️ DeFi & Protocol Integrators** | [**Monitor Architecture (`docs/MONITOR_ARCHITECTURE.md`)**](docs/MONITOR_ARCHITECTURE.md) · [**Environment Variables (`docs/ENVIRONMENT_VARIABLES.md`)**](docs/ENVIRONMENT_VARIABLES.md) · [**Command Reference (`docs/COMMANDS.md`)**](docs/COMMANDS.md) |
+| **🛡️ Security Auditors & Operators** | [**Operator Runbook (`docs/OPERATOR_RUNBOOK.md`)**](docs/OPERATOR_RUNBOOK.md) · [**Deployment Checklist (`docs/DEPLOYMENT_CHECKLIST.md`)**](docs/DEPLOYMENT_CHECKLIST.md) · [**Security Policy (`SECURITY.md`)**](SECURITY.md) |
+| **🤖 AI Assistants & Autonomous Agents** | [**Agent Rules (`AGENTS.md`)**](AGENTS.md) · [**Repository Governance (`docs/REPOSITORY_GOVERNANCE.md`)**](docs/REPOSITORY_GOVERNANCE.md) |
+
 ## What It Does
 
 - Indexes the active NARA token, engine, liquidity hook, vault, and compounder on Base.
@@ -79,7 +88,7 @@ Deferred contracts use empty address lists in `core`. The monitor never invents
 placeholder production addresses or deploys contracts merely to satisfy its
 configuration.
 
-The V5 modular contract suite (including `NARAEpochEngineV5`, `NARAPrincipalLedgerV5`, `NARARewardLedgerV5`, `NARAPositionNFTV5`, `NARAPositionSaleV5`, `NARALiquidityHookV5`, `NARAFeeVaultV5`, and `NARATreasuryRangeManagerV5`) is deployed and source-verified on Base Mainnet (`8453`, verification block `53,422,831`). Optional V5 modular surfaces are configured via the `V5_*` environment variables documented in [`docs/ENVIRONMENT_VARIABLES.md`](docs/ENVIRONMENT_VARIABLES.md).
+The V5 modular contract suite (`35` contracts, including `NARATokenV5` `0x91FB78A9F46B67f54BbD4489941d19666b2fAe0f`, `NARAEmissionReserveV5` `0xf932178F24b0813C82093985F0Af6Db27Ae25930`, `NARAEpochEngineV5` `0xd93FbEbFb33FAc9288125074625D4750573B1a53`, `NARAPrincipalLedgerV5` `0x7F866a9fbe41D54F0d9C35b6892fcf27Ea766DB2`, `NARARewardLedgerV5` `0xC72671D9438388638547444524F6542b650C9264`, `NARAPositionNFTV5` `0x8C5F088D9d09dBB90aB6F3aaA049a8FD5D5FfFDA`, `NARAPositionSaleV5` `0x04Ac83045d26259D46400Ce6beb9bBd0641df225`, `NARALiquidityHookV5` `0x07d8F2Dfd121B10dE3176DeAb6A8C0eaa2646aCC`, `NARAFeeVaultV5` `0xF1f361F803895BF5cf67eC6C506dbFEf2f6E88Cf`, `NARATreasuryFeeControllerV5` `0xB6A436b48222C94fe427ecAfB263DF9cf42646b9`, `NARAPoolOracleV5` `0xBCF29E9E37E62FBB996D5FF890FEd5280fC02e1A`, Active-Pool `NARATreasuryRangeManagerV5` `0x221c625d2BC416460C397035C1286C1f4A4D3A7C`, and Legacy `NARATreasuryRangeManagerV5` `0xa72557fcBE56B3eC739dF3aF7b6b893B6Db4D288`) is deployed and source-verified on Base Mainnet (`8453`, verification checkpoint block `54,778,829`). Optional V5 modular surfaces are configured via the `V5_*` environment variables documented in [`docs/ENVIRONMENT_VARIABLES.md`](docs/ENVIRONMENT_VARIABLES.md).
 
 ## Quick Start
 

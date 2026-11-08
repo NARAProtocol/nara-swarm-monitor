@@ -1,13 +1,13 @@
 # NARA Swarm Monitor Architecture
 
-This repository is the read-only monitor for the fresh active NARA v4 stack.
+This repository is the read-only monitor for the active NARA Protocol V5 stack (and compatible v4 core indexing schemas) on Base Mainnet (`8453`).
 It must not index, call, or describe v3, retired incident-stack contracts,
 mining, jackpot, arena, or old cron/keeper behavior as active.
 
 ## Data Flow
 
 ```text
-active v4 contracts
+active V5 / v4 contracts
   -> Ponder event and trace indexing
   -> schema tables
   -> SQL views
@@ -19,7 +19,7 @@ active v4 contracts
 
 The monitor never sends transactions and never holds private keys.
 
-The deployed v4 core and canonical NARA/USDC pool are in technical live testing
+The deployed V5 core and canonical NARA/USDC pool (`0x4a475299ef674bcc3d2c87c3917cfbecd38cf7237646a3553e37daba67da6e5f`) are in technical live testing
 with real assets. This observation layer does not establish public product
 availability, production readiness, safety, legal approval, or availability in
 any jurisdiction. Its outputs are operational telemetry, not investment

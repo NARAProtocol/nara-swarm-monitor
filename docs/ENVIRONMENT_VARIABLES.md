@@ -75,14 +75,14 @@ injected `PORT` is `8080`.
 
 ## Contracts
 
-All contract addresses must be fresh active v4 addresses. Do not use v3 or
+All contract addresses must be active V5 (or verified fresh v4) addresses on Base Mainnet (`8453`). Do not use v3 or
 retired incident-stack addresses.
 
 `V4_NARA_TOKEN`
-: Fresh active v4 `NARAToken`.
+: Active NARA token address (`NARATokenV5` `0x91FB78A9F46B67f54BbD4489941d19666b2fAe0f`).
 
 `V4_ENGINE`
-: Fresh active v4 `NARAEngine`.
+: Active epoch engine address (`NARAEpochEngineV5` `0xd93FbEbFb33FAc9288125074625D4750573B1a53`).
 
 `V4_POSITION_NFT`
 : Active Position NFT contract address (`NARAPositionNFTV5` `0x8C5F088D9d09dBB90aB6F3aaA049a8FD5D5FfFDA` on V5). Optional in the `core` profile.
@@ -113,13 +113,13 @@ retired incident-stack addresses.
 address.
 
 `V4_LIQUIDITY_GROWTH_HOOK`
-: Required by both profiles. Fresh liquidity-growth hook address.
+: Required by both profiles. Active liquidity hook address (`NARALiquidityHookV5` `0x07d8F2Dfd121B10dE3176DeAb6A8C0eaa2646aCC`).
 
 `V4_LIQUIDITY_GROWTH_VAULT`
-: Required by both profiles. Fresh liquidity-growth vault address.
+: Required by both profiles. Active fee vault address (`NARAFeeVaultV5` `0xF1f361F803895BF5cf67eC6C506dbFEf2f6E88Cf`).
 
 `V4_LIQUIDITY_COMPOUNDER`
-: Required by both profiles. Fresh liquidity compounder address.
+: Required by both profiles. Active liquidity compounding controller (`NARACapitalPolicyV5` `0xC6b5471ADadcf66c2375EC8600bb7a3D85C73e45`).
 
 `V4_USDC_TOKEN`
 : Verified Base USDC address used to prove that a Hook fee event is a canonical
@@ -171,11 +171,11 @@ address.
   Telegram `/contracts` display.
 
 `V5_POOL_ORACLE`
-: Optional V5 `NARAPoolOracleV5` address for protocol wallet labeling and
+: Optional V5 `NARAPoolOracleV5` (`0xBCF29E9E37E62FBB996D5FF890FEd5280fC02e1A`) address for protocol wallet labeling and
   Telegram `/contracts` display.
 
 `V5_TREASURY_RANGE_MANAGER`
-: Optional V5 `NARATreasuryRangeManagerV5` address for protocol wallet labeling
+: Optional V5 `NARATreasuryRangeManagerV5` (`0x221c625d2BC416460C397035C1286C1f4A4D3A7C`) address for protocol wallet labeling
   and Telegram `/contracts` display.
 
 ## Liquidity
@@ -184,7 +184,7 @@ address.
 : Optional DEX type label. Current default is `uniswap_v4`.
 
 `V4_UNISWAP_V4_POOL_ID`
-: Optional fresh v4 pool ID.
+: Optional canonical Uniswap v4 pool ID (`0x4a475299ef674bcc3d2c87c3917cfbecd38cf7237646a3553e37daba67da6e5f`).
 
 `V4_LIQUIDITY_HOOK`
 : Optional legacy environment alias. Runtime indexing uses
