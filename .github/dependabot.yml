@@ -15,10 +15,12 @@ updates:
           - patch
           - minor
     ignore:
-      # eslint-config-ponder requires peer eslint@^7.0.0 || ^8.0.0
+      # eslint-config-ponder requires peer eslint@^7.0.0 || ^8.0.0 and TypeScript 5.x AST APIs
       - dependency-name: "eslint"
         update-types: ["version-update:semver-major"]
       - dependency-name: "@typescript-eslint/*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "typescript"
         update-types: ["version-update:semver-major"]
   - package-ecosystem: github-actions
     directory: /
