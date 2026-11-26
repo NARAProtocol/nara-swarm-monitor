@@ -41,11 +41,11 @@
     "viem": "^2.58.4"
   },
   "devDependencies": {
-    "@types/node": "^20.9.0",
+    "@types/node": "^26.6.6",
     "@types/pg": "^8.23.1",
     "eslint": "^8.53.0",
-    "eslint-config-ponder": "^0.16.6",
-    "typescript": "^5.2.2"
+    "eslint-config-ponder": "^0.18.2",
+    "typescript": "^7.0.2"
   },
   "overrides": {
     "@fastify/busboy": "3.2.4",
